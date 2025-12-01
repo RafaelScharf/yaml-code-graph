@@ -7,6 +7,7 @@ pub mod file_filter;
 pub mod framework_filter;
 pub mod model;
 pub mod semantic_filter;
+pub mod type_abbreviator;
 pub mod validators;
 
 pub mod scip_proto {
