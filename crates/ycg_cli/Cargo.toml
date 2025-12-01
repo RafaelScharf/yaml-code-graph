@@ -1,0 +1,11 @@
+[package]
+name = "ycg_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Importa a lib vizinha pelo caminho relativo
+ycg_core = { path = "../ycg_core" }
+anyhow = "1.0"
+# Adicione o clap com a feature "derive" para usar structs
+clap = { version = "4.4", features = ["derive"] }
