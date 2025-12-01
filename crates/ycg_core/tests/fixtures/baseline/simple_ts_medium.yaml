@@ -1,0 +1,61 @@
+_meta:
+  name: ycg-v1.3
+  version: 1.3.0
+_defs:
+- id: def_68a6
+  n: main.ts
+  t: file
+  parent_id: file_2611
+- id: hello_2f76
+  n: hello
+  t: method
+  parent_id: file_2611
+  doc: |-
+    Calcula uma saudação personalizada.
+      @param name O nome do usuário.
+  sig: 'function hello(name: string)'
+  logic:
+    pre:
+    - 'must avoid: name.length === 0'
+- id: User_486c
+  n: User
+  t: class
+  parent_id: file_2611
+  sig: class User
+  logic:
+    pre:
+    - 'must avoid: id < 0'
+- id: User_id_7591
+  n: User#id
+  t: variable
+  parent_id: User_486c
+  sig: 'id: number'
+- id: User__constructor__823a
+  n: User#<constructor>
+  t: method
+  parent_id: file_2611
+  sig: 'constructor(id: number)'
+  logic:
+    pre:
+    - 'must avoid: id < 0'
+- id: main_c0df
+  n: main
+  t: method
+  parent_id: file_2611
+  sig: function main()
+graph:
+- from: file_2611
+  to: User__constructor__823a
+  type: calls
+- from: file_2611
+  to: User__constructor_____id__774b
+  type: calls
+- from: file_2611
+  to: User_id_7591
+  type: calls
+- from: file_2611
+  to: hello_2f76
+  type: calls
+- from: hello_2f76
+  to: hello____name__9ff6
+  type: calls

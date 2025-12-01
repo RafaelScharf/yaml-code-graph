@@ -1,0 +1,470 @@
+_meta:
+  name: ycg-v1.3
+  version: 1.3.0
+_defs:
+- id: def_8c88
+  n: user.dto.ts
+  t: file
+  parent_id: file_61d9
+- id: UserDto_698e
+  n: UserDto
+  t: class
+  parent_id: file_61d9
+- id: UserDto_userId_1fb9
+  n: UserDto#userId
+  t: variable
+  parent_id: UserDto_698e
+  doc: O ID exclusivo do usuário.
+  sig: 'userId: number'
+- id: UserDto_username_f01a
+  n: UserDto#username
+  t: variable
+  parent_id: UserDto_698e
+  doc: O nome de usuário único.
+  sig: 'username: string'
+- id: InternalUser_b45d
+  n: InternalUser
+  t: class
+  parent_id: file_61d9
+- id: InternalUser_userId_54d6
+  n: InternalUser#userId
+  t: variable
+  parent_id: InternalUser_b45d
+  doc: O ID exclusivo do usuário.
+  sig: 'userId: number'
+- id: InternalUser_username_3092
+  n: InternalUser#username
+  t: variable
+  parent_id: InternalUser_b45d
+  doc: O nome de usuário único.
+  sig: 'username: string'
+- id: InternalUser_password_7cfd
+  n: InternalUser#password
+  t: variable
+  parent_id: InternalUser_b45d
+  doc: A senha do usuário (em um ambiente real, seria hashed).
+  sig: 'password: string'
+- id: def_1b21
+  n: users.service.ts
+  t: file
+  parent_id: file_7453
+- id: mockUsers_ab8f
+  n: mockUsers
+  t: variable
+  parent_id: file_7453
+  doc: // Banco de dados simulado
+  sig: 'const mockUsers: InternalUser[] = ['
+- id: UsersService_4844
+  n: UsersService
+  t: class
+  parent_id: file_7453
+  sig: class UsersService
+  logic:
+    pre:
+    - 'must avoid: !user'
+    - 'must avoid: !user'
+- id: UsersService_findOne_7fed
+  n: UsersService#findOne
+  t: method
+  parent_id: UsersService_4844
+  doc: |-
+    Busca um usuário pelo nome de usuário.
+        @param username O nome de usuário para buscar.
+        @returns O objeto InternalUser encontrado ou undefined.
+  sig: 'async findOne(username: string): Promise<InternalUser | undefined>'
+  logic:
+    pre:
+    - 'must avoid: !user'
+- id: UsersService_findById_7f1f
+  n: UsersService#findById
+  t: method
+  parent_id: UsersService_4844
+  doc: |-
+    Busca um usuário pelo ID.
+        @param id O ID do usuário para buscar.
+        @returns O objeto InternalUser encontrado ou undefined.
+  sig: 'async findById(id: number): Promise<InternalUser | undefined>'
+  logic:
+    pre:
+    - 'must avoid: !user'
+- id: def_b539
+  n: auth.service.ts
+  t: file
+  parent_id: file_945c
+- id: AuthService_3a0d
+  n: AuthService
+  t: class
+  parent_id: file_945c
+  sig: class AuthService
+  logic:
+    pre:
+    - 'must avoid: user && user.password === pass'
+- id: AuthService__constructor__1abe
+  n: AuthService#<constructor>
+  t: method
+  parent_id: file_945c
+  doc: '@param usersService O serviço para interagir com dados do usuário.'
+  sig: 'constructor(private usersService: UsersService)'
+- id: AuthService_validateUser_dd39
+  n: AuthService#validateUser
+  t: method
+  parent_id: AuthService_3a0d
+  doc: |-
+    Valida um usuário com base nas credenciais.
+        @param username O nome de usuário.
+        @param pass A senha do usuário.
+        @returns O objeto do usuário, exceto a senha, se a validação for bem-sucedida.
+  sig: 'async validateUser(username: string, pass: string): Promise<any>'
+  logic:
+    pre:
+    - 'must avoid: user && user.password === pass'
+- id: def_924a
+  n: auth.controller.ts
+  t: file
+  parent_id: file_4acf
+- id: AuthController_6ba5
+  n: AuthController
+  t: class
+  parent_id: file_4acf
+  sig: class AuthController
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: AuthController__constructor__4bec
+  n: AuthController#<constructor>
+  t: method
+  parent_id: file_4acf
+  sig: 'constructor(private authService: AuthService)'
+- id: AuthController_login_8ec4
+  n: AuthController#login
+  t: method
+  parent_id: AuthController_6ba5
+  sig: 'username: string'
+- id: access_token0__c899
+  n: 'access_token0:'
+  t: variable
+  parent_id: file_4acf
+  sig: 'async login(@Body() loginDto:'
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: user0__f10b
+  n: 'user0:'
+  t: variable
+  parent_id: file_4acf
+  sig: 'async login(@Body() loginDto:'
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: message0__2f87
+  n: 'message0:'
+  t: variable
+  parent_id: file_4acf
+  sig: 'async login(@Body() loginDto:'
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: def_a4a3
+  n: users.controller.ts
+  t: file
+  parent_id: file_cd73
+- id: UsersController_4702
+  n: UsersController
+  t: class
+  parent_id: file_cd73
+  sig: class UsersController
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: UsersController__constructor__cb29
+  n: UsersController#<constructor>
+  t: method
+  parent_id: file_cd73
+  sig: 'constructor(private usersService: UsersService)'
+- id: UsersController_findOne_13b7
+  n: UsersController#findOne
+  t: method
+  parent_id: UsersController_4702
+  sig: 'async findOne(@Param(''id'', ParseIntPipe) id: number): Promise<UserDto>'
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: userId0__95a5
+  n: 'userId0:'
+  t: variable
+  parent_id: file_cd73
+  sig: 'async findOne(@Param(''id'', ParseIntPipe) id: number): Promise<UserDto>'
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: username0__e666
+  n: 'username0:'
+  t: variable
+  parent_id: file_cd73
+  sig: 'async findOne(@Param(''id'', ParseIntPipe) id: number): Promise<UserDto>'
+  logic:
+    pre:
+    - 'must avoid: user'
+- id: def_2201
+  n: users.module.ts
+  t: file
+  parent_id: file_31df
+- id: UsersModule_6e98
+  n: UsersModule
+  t: class
+  parent_id: file_31df
+  sig: class UsersModule
+- id: def_9b39
+  n: auth.module.ts
+  t: file
+  parent_id: file_650f
+- id: AuthModule_5ded
+  n: AuthModule
+  t: class
+  parent_id: file_650f
+  sig: class AuthModule
+- id: def_c667
+  n: app.module.ts
+  t: file
+  parent_id: file_ae19
+- id: AppModule_f66b
+  n: AppModule
+  t: class
+  parent_id: file_ae19
+  sig: class AppModule
+- id: def_1280
+  n: main.ts
+  t: file
+  parent_id: file_85bd
+- id: bootstrap_357f
+  n: bootstrap
+  t: method
+  parent_id: file_85bd
+  doc: // Import the ValidationPipe
+  sig: async function bootstrap()
+- id: def_49b1
+  n: auth.guard.ts
+  t: file
+  parent_id: file_f9d3
+- id: AuthGuard_159a
+  n: AuthGuard
+  t: class
+  parent_id: file_f9d3
+  sig: class AuthGuard implements CanActivate
+  logic:
+    pre:
+    - 'must avoid: token && token.startsWith(''Bearer '''
+- id: AuthGuard_canActivate_c9aa
+  n: AuthGuard#canActivate
+  t: method
+  parent_id: AuthGuard_159a
+  doc: Simula a validação de um token de acesso na requisição.
+  sig: |-
+    canActivate(
+        context: ExecutionContext,
+      ): boolean | Promise<boolean> | Observable<boolean>
+  logic:
+    pre:
+    - 'must avoid: token && token.startsWith(''Bearer '''
+graph:
+- from: AuthController_6ba5
+  to: AuthController__constructor_____authService__c31d
+  type: calls
+- from: AuthController_6ba5
+  to: AuthController_login____loginDto__fa03
+  type: calls
+- from: AuthController_6ba5
+  to: AuthController_login____loginDto_typeLiteral0_password_6a46
+  type: calls
+- from: AuthController_6ba5
+  to: AuthController_login____loginDto_typeLiteral0_username_bbfa
+  type: calls
+- from: AuthController_6ba5
+  to: AuthService_validateUser_dd39
+  type: calls
+- from: AuthController_6ba5
+  to: local_3_9c5e
+  type: calls
+- from: AuthController__constructor__4bec
+  to: AuthService_3a0d
+  type: calls
+- from: AuthGuard_159a
+  to: local_3_9c5e
+  type: calls
+- from: AuthGuard_159a
+  to: local_6_35a8
+  type: calls
+- from: AuthGuard_canActivate_c9aa
+  to: AuthGuard_canActivate____context__7dca
+  type: calls
+- from: AuthService_3a0d
+  to: AuthService_validateUser____pass__2ee5
+  type: calls
+- from: AuthService_3a0d
+  to: InternalUser_password_7cfd
+  type: calls
+- from: AuthService_3a0d
+  to: local_2_91ef
+  type: calls
+- from: AuthService_3a0d
+  to: local_8_3e0e
+  type: calls
+- from: AuthService__constructor__1abe
+  to: UsersService_4844
+  type: calls
+- from: AuthService_validateUser_dd39
+  to: AuthService__constructor_____usersService__1c63
+  type: calls
+- from: AuthService_validateUser_dd39
+  to: AuthService_validateUser____username__87f5
+  type: calls
+- from: AuthService_validateUser_dd39
+  to: UsersService_findOne_7fed
+  type: calls
+- from: UsersController_4702
+  to: InternalUser_userId_54d6
+  type: calls
+- from: UsersController_4702
+  to: InternalUser_username_3092
+  type: calls
+- from: UsersController_4702
+  to: local_2_91ef
+  type: calls
+- from: UsersController__constructor__cb29
+  to: UsersService_4844
+  type: calls
+- from: UsersController_findOne_13b7
+  to: UserDto_698e
+  type: calls
+- from: UsersController_findOne_13b7
+  to: UsersController__constructor_____usersService__f634
+  type: calls
+- from: UsersController_findOne_13b7
+  to: UsersController_findOne____id__1ac8
+  type: calls
+- from: UsersController_findOne_13b7
+  to: UsersService_findById_7f1f
+  type: calls
+- from: UsersService_4844
+  to: InternalUser_b45d
+  type: calls
+- from: UsersService_4844
+  to: InternalUser_username_3092
+  type: calls
+- from: UsersService_4844
+  to: UsersService_findOne____username__1dc5
+  type: calls
+- from: UsersService_4844
+  to: local_2_91ef
+  type: calls
+- from: UsersService_4844
+  to: local_5_44cf
+  type: calls
+- from: UsersService_4844
+  to: mockUsers_ab8f
+  type: calls
+- from: bootstrap_357f
+  to: AppModule_f66b
+  type: calls
+- from: bootstrap_357f
+  to: local_2_91ef
+  type: calls
+- from: file_31df
+  to: UsersController_4702
+  type: calls
+- from: file_31df
+  to: UsersService_4844
+  type: calls
+- from: file_31df
+  to: def_1b21
+  type: calls
+- from: file_31df
+  to: def_a4a3
+  type: calls
+- from: file_4acf
+  to: AuthService_3a0d
+  type: calls
+- from: file_4acf
+  to: def_b539
+  type: calls
+- from: file_650f
+  to: AuthController_6ba5
+  type: calls
+- from: file_650f
+  to: AuthService_3a0d
+  type: calls
+- from: file_650f
+  to: UsersModule_6e98
+  type: calls
+- from: file_650f
+  to: def_2201
+  type: calls
+- from: file_650f
+  to: def_924a
+  type: calls
+- from: file_650f
+  to: def_b539
+  type: calls
+- from: file_7453
+  to: InternalUser_b45d
+  type: calls
+- from: file_7453
+  to: InternalUser_password_7cfd
+  type: calls
+- from: file_7453
+  to: InternalUser_userId_54d6
+  type: calls
+- from: file_7453
+  to: InternalUser_username_3092
+  type: calls
+- from: file_7453
+  to: UsersService_findById____id__3b6b
+  type: calls
+- from: file_7453
+  to: def_8c88
+  type: calls
+- from: file_7453
+  to: local_11_6d84
+  type: calls
+- from: file_7453
+  to: local_8_3e0e
+  type: calls
+- from: file_7453
+  to: mockUsers_ab8f
+  type: calls
+- from: file_85bd
+  to: AppModule_f66b
+  type: calls
+- from: file_85bd
+  to: def_c667
+  type: calls
+- from: file_945c
+  to: UsersService_4844
+  type: calls
+- from: file_945c
+  to: def_1b21
+  type: calls
+- from: file_ae19
+  to: AuthModule_5ded
+  type: calls
+- from: file_ae19
+  to: UsersModule_6e98
+  type: calls
+- from: file_ae19
+  to: def_2201
+  type: calls
+- from: file_ae19
+  to: def_9b39
+  type: calls
+- from: file_cd73
+  to: UserDto_698e
+  type: calls
+- from: file_cd73
+  to: UsersService_4844
+  type: calls
+- from: file_cd73
+  to: def_1b21
+  type: calls
+- from: file_cd73
+  to: def_8c88
+  type: calls
