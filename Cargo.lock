@@ -839,6 +839,7 @@ dependencies = [
  "anyhow",
  "glob",
  "ignore",
+ "lazy_static",
  "prost",
  "prost-build",
  "prost-types",

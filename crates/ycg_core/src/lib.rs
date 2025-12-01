@@ -3,6 +3,7 @@ pub mod config;
 pub mod enricher;
 pub mod file_filter;
 pub mod model;
+pub mod semantic_filter;
 
 pub mod scip_proto {
     include!(concat!(env!("OUT_DIR"), "/scip.rs"));
