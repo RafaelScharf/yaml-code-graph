@@ -59,6 +59,7 @@ fn test_cli_precedence_over_config() {
             format: Some("yaml".to_string()),
             compact: Some(false),
             ignore_framework_noise: Some(false),
+            adhoc_granularity: None,
         },
         ignore: IgnoreConfig {
             use_gitignore: Some(true),
@@ -160,6 +161,7 @@ fn test_invalid_output_format() {
             format: None,
             compact: None,
             ignore_framework_noise: None,
+            adhoc_granularity: None,
         },
         ignore: IgnoreConfig {
             use_gitignore: None,

@@ -5,7 +5,7 @@
 use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
-use ycg_core::model::{FileFilterConfig, OutputFormat};
+use ycg_core::model::{AdHocGranularity, FileFilterConfig, OutputFormat};
 use ycg_core::{LevelOfDetail, YcgConfig, run_scip_conversion};
 
 /// Test case configuration for baseline generation
@@ -93,6 +93,7 @@ fn generate_baseline(test_case: &BaselineTestCase, baseline_dir: &Path) -> Resul
             exclude_patterns: vec![],
             use_gitignore: false, // Default: don't use gitignore for baseline
         },
+        adhoc_granularity: AdHocGranularity::default(), // Default: Level 0
     };
 
     // Generate output

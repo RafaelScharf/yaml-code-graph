@@ -106,6 +106,8 @@ pub struct OutputConfig {
     pub compact: Option<bool>,
     #[serde(rename = "ignoreFrameworkNoise")]
     pub ignore_framework_noise: Option<bool>,
+    #[serde(rename = "adhocGranularity")]
+    pub adhoc_granularity: Option<String>,
 }
 
 /// Ignore patterns configuration
@@ -138,6 +140,76 @@ pub struct FileFilterConfig {
     pub use_gitignore: bool,
 }
 
+// --- AD-HOC GRANULARITY CONFIGURATION ---
+
+/// Granularity levels for ad-hoc format output
+///
+/// Controls the amount of detail included in each symbol definition.
+/// All levels are opt-in through CLI flags or configuration file.
+///
+/// **Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdHocGranularity {
+    /// Level 0: Default format (ID|Name|Type)
+    /// Maximum token efficiency, structural information only
+    /// **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6**
+    Default,
+
+    /// Level 1: Inline signatures (ID|Signature(args):Return|Type)
+    /// Includes function signatures with abbreviated types
+    /// **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8**
+    InlineSignatures,
+
+    /// Level 2: Inline logic (ID|Signature|Type|logic:steps)
+    /// Includes signatures plus compact logic representation
+    /// **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11**
+    InlineLogic,
+}
+
+impl Default for AdHocGranularity {
+    fn default() -> Self {
+        AdHocGranularity::Default
+    }
+}
+
+impl AdHocGranularity {
+    /// Parse from string (for config file)
+    ///
+    /// # Arguments
+    /// * `s` - String value from configuration file
+    ///
+    /// # Returns
+    /// * `Ok(AdHocGranularity)` if valid
+    /// * `Err(String)` with error message if invalid
+    ///
+    /// # Valid Values
+    /// - "default" → AdHocGranularity::Default
+    /// - "signatures" → AdHocGranularity::InlineSignatures
+    /// - "logic" → AdHocGranularity::InlineLogic
+    ///
+    /// **Validates: Requirements 7.3, 7.4, 7.5, 7.6**
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "default" => Ok(AdHocGranularity::Default),
+            "signatures" => Ok(AdHocGranularity::InlineSignatures),
+            "logic" => Ok(AdHocGranularity::InlineLogic),
+            _ => Err(format!(
+                "Invalid adhocGranularity value: '{}'. Valid values are: 'default', 'signatures', 'logic'",
+                s
+            )),
+        }
+    }
+
+    /// Convert to string representation
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            AdHocGranularity::Default => "default",
+            AdHocGranularity::InlineSignatures => "signatures",
+            AdHocGranularity::InlineLogic => "logic",
+        }
+    }
+}
+
 // --- AD-HOC FORMAT MODEL ---
 
 /// Ad-hoc format representation using pipe-separated strings
@@ -151,4 +223,76 @@ pub struct YcgGraphAdHoc {
 
     #[serde(rename = "graph")]
     pub adjacency: BTreeMap<String, BTreeMap<EdgeType, Vec<String>>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adhoc_granularity_default() {
+        let granularity = AdHocGranularity::default();
+        assert_eq!(granularity, AdHocGranularity::Default);
+    }
+
+    #[test]
+    fn test_adhoc_granularity_from_str_valid() {
+        assert_eq!(
+            AdHocGranularity::from_str("default").unwrap(),
+            AdHocGranularity::Default
+        );
+        assert_eq!(
+            AdHocGranularity::from_str("DEFAULT").unwrap(),
+            AdHocGranularity::Default
+        );
+        assert_eq!(
+            AdHocGranularity::from_str("signatures").unwrap(),
+            AdHocGranularity::InlineSignatures
+        );
+        assert_eq!(
+            AdHocGranularity::from_str("SIGNATURES").unwrap(),
+            AdHocGranularity::InlineSignatures
+        );
+        assert_eq!(
+            AdHocGranularity::from_str("logic").unwrap(),
+            AdHocGranularity::InlineLogic
+        );
+        assert_eq!(
+            AdHocGranularity::from_str("LOGIC").unwrap(),
+            AdHocGranularity::InlineLogic
+        );
+    }
+
+    #[test]
+    fn test_adhoc_granularity_from_str_invalid() {
+        let result = AdHocGranularity::from_str("invalid");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("invalid"));
+        assert!(err.contains("default"));
+        assert!(err.contains("signatures"));
+        assert!(err.contains("logic"));
+    }
+
+    #[test]
+    fn test_adhoc_granularity_to_str() {
+        assert_eq!(AdHocGranularity::Default.to_str(), "default");
+        assert_eq!(AdHocGranularity::InlineSignatures.to_str(), "signatures");
+        assert_eq!(AdHocGranularity::InlineLogic.to_str(), "logic");
+    }
+
+    #[test]
+    fn test_adhoc_granularity_round_trip() {
+        let levels = vec![
+            AdHocGranularity::Default,
+            AdHocGranularity::InlineSignatures,
+            AdHocGranularity::InlineLogic,
+        ];
+
+        for level in levels {
+            let str_repr = level.to_str();
+            let parsed = AdHocGranularity::from_str(str_repr).unwrap();
+            assert_eq!(level, parsed);
+        }
+    }
 }

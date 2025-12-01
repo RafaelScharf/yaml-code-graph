@@ -44,6 +44,9 @@ pub struct YcgConfig {
     pub output_format: model::OutputFormat,
     pub ignore_framework_noise: bool,
     pub file_filter: model::FileFilterConfig,
+
+    // Ad-hoc granularity level (Requirements 1.1-1.6)
+    pub adhoc_granularity: model::AdHocGranularity,
 }
 
 struct Scope {
