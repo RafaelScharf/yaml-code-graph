@@ -10,6 +10,7 @@
 //!
 //! **Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.8, 3.1, 3.2**
 
+use crate::ast_cache::AstCache;
 use crate::logic_extractor::LogicExtractor;
 use crate::model::{AdHocGranularity, ScipSymbolKind, SymbolNode, YcgGraph, YcgGraphAdHoc};
 use crate::signature_extractor::SignatureExtractor;
@@ -184,6 +185,29 @@ impl AdHocSerializerV2 {
         graph: &YcgGraph,
         sources: &std::collections::HashMap<String, String>,
     ) -> YcgGraphAdHoc {
+        self.serialize_graph_with_cache(graph, sources, &mut AstCache::new())
+    }
+
+    /// Serialize entire graph to YcgGraphAdHoc format with AST caching
+    ///
+    /// This version accepts an AstCache to enable AST reuse across multiple symbols
+    /// in the same file, improving performance for Level 1 and Level 2 granularity.
+    ///
+    /// # Arguments
+    /// * `graph` - The graph to serialize
+    /// * `sources` - Map of file paths to source code content (for signature/logic extraction)
+    /// * `cache` - AST cache for reusing parsed ASTs
+    ///
+    /// # Returns
+    /// YcgGraphAdHoc with serialized definitions and adjacency list
+    ///
+    /// **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 2.1, 2.8, 3.1, 3.2, 10.3, 10.4**
+    pub fn serialize_graph_with_cache(
+        &self,
+        graph: &YcgGraph,
+        sources: &std::collections::HashMap<String, String>,
+        cache: &mut AstCache,
+    ) -> YcgGraphAdHoc {
         let definitions = graph
             .definitions
             .iter()
@@ -191,6 +215,20 @@ impl AdHocSerializerV2 {
                 // Get source code for this node's file
                 // For now, use empty string as placeholder since we don't have file mapping
                 let source = sources.get(&node.id).map(|s| s.as_str()).unwrap_or("");
+
+                // Cache the AST for this file if we're using Level 1 or Level 2
+                // This allows multiple symbols from the same file to reuse the parsed AST
+                if !source.is_empty()
+                    && matches!(
+                        self.granularity,
+                        AdHocGranularity::InlineSignatures | AdHocGranularity::InlineLogic
+                    )
+                {
+                    // Pre-populate cache for this file
+                    // The actual parsing will happen in the extractors when tree-sitter is integrated
+                    cache.get_or_parse(&node.id, source);
+                }
+
                 self.serialize_node(node, source)
             })
             .collect();

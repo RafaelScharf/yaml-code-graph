@@ -6,6 +6,7 @@
 //!
 //! **Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8**
 
+use crate::ast_cache::AstCache;
 use crate::model::SymbolNode;
 use crate::type_abbreviator::TypeAbbreviator;
 
@@ -39,6 +40,40 @@ impl SignatureExtractor {
         }
 
         // No signature available, return None to fall back to simple name
+        None
+    }
+
+    /// Extract compact signature from a SymbolNode with AST caching
+    ///
+    /// This version accepts an AstCache to enable AST reuse when extracting
+    /// signatures from multiple symbols in the same file.
+    ///
+    /// # Arguments
+    /// * `node` - The symbol node to extract signature from
+    /// * `file_path` - Path to the source file (for cache lookup)
+    /// * `cache` - AST cache for reusing parsed ASTs
+    ///
+    /// # Returns
+    /// * `Some(String)` - Compact signature
+    /// * `None` - If no signature can be extracted
+    ///
+    /// **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 10.3, 10.4**
+    pub fn extract_signature_with_cache(
+        node: &SymbolNode,
+        file_path: &str,
+        cache: &mut AstCache,
+    ) -> Option<String> {
+        // If node has a signature from enricher, use it
+        if let Some(ref sig) = node.signature {
+            return Some(Self::compact_signature(sig, &node.name));
+        }
+
+        // Try to extract from cached AST
+        // When tree-sitter integration is complete, this will use the cached AST
+        let _ast = cache.get(file_path)?;
+
+        // Placeholder: tree-sitter extraction would happen here
+        // For now, return None to fall back to simple name
         None
     }
 

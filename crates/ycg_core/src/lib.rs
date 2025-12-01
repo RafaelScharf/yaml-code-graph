@@ -1,6 +1,7 @@
 // crates/ycg_core/src/lib.rs
 pub mod adhoc_format;
 pub mod adhoc_serializer_v2;
+pub mod ast_cache;
 pub mod config;
 pub mod enricher;
 pub mod errors;

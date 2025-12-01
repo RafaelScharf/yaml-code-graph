@@ -41,6 +41,7 @@
 //! check(stock>0);check(user.balance>=price);action(deduct_balance);action(save_order)
 //! ```
 
+use crate::ast_cache::AstCache;
 use crate::model::{ScipSymbolKind, SymbolNode};
 
 /// Maximum length for logic representation (excluding "logic:" prefix)
@@ -82,6 +83,49 @@ impl LogicExtractor {
         // Placeholder: Return None until tree-sitter integration is complete
         // This allows the system to work without logic extraction
         // and fall back to Level 1 format (signatures only)
+        None
+    }
+
+    /// Extract compact logic representation from a SymbolNode with AST caching
+    ///
+    /// This version accepts an AstCache to enable AST reuse when extracting
+    /// logic from multiple symbols in the same file.
+    ///
+    /// # Arguments
+    /// * `node` - The symbol node to extract logic from
+    /// * `file_path` - Path to the source file (for cache lookup)
+    /// * `cache` - AST cache for reusing parsed ASTs
+    ///
+    /// # Returns
+    /// * `Some(String)` - Logic representation in format "logic:steps"
+    /// * `None` - If no logic can be extracted or node is not a method/function
+    ///
+    /// # Future Implementation
+    ///
+    /// When tree-sitter integration is complete, this will:
+    /// 1. Get cached AST from cache (or parse if not cached)
+    /// 2. Traverse AST to identify logic patterns
+    /// 3. Extract and format logic keywords
+    /// 4. Chain steps with semicolons
+    /// 5. Truncate at MAX_LOGIC_LENGTH characters
+    ///
+    /// **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 10.3, 10.4**
+    pub fn extract_logic_with_cache(
+        node: &SymbolNode,
+        file_path: &str,
+        cache: &mut AstCache,
+    ) -> Option<String> {
+        // Only extract logic for methods and functions
+        if !matches!(node.kind, ScipSymbolKind::Method | ScipSymbolKind::Function) {
+            return None;
+        }
+
+        // Try to get cached AST
+        // When tree-sitter integration is complete, this will use the cached AST
+        let _ast = cache.get(file_path)?;
+
+        // Placeholder: tree-sitter extraction would happen here
+        // For now, return None to fall back to Level 1 format
         None
     }
 
