@@ -64,7 +64,26 @@ pub fn run_scip_conversion(scip_path: &Path, config: YcgConfig) -> Result<String
     println!("Carregando índice SCIP de: {:?}", scip_path);
 
     let data = fs::read(scip_path).with_context(|| format!("Falha ao ler: {:?}", scip_path))?;
-    let index = scip_proto::Index::decode(&data[..]).context("Falha ao decodificar SCIP")?;
+    let mut index = scip_proto::Index::decode(&data[..]).context("Falha ao decodificar SCIP")?;
+
+    // STEP 1: File Filtering (Requirements 4.1-4.7)
+    // Apply file filtering before processing if any filters are configured
+    if !config.file_filter.include_patterns.is_empty()
+        || !config.file_filter.exclude_patterns.is_empty()
+        || config.file_filter.use_gitignore
+    {
+        println!(">>> Aplicando filtros de arquivo...");
+        let file_filter = file_filter::FileFilter::new(&config.file_filter, &config.project_root)?;
+        let original_count = index.documents.len();
+        index.documents = file_filter.filter_documents(index.documents);
+        let filtered_count = index.documents.len();
+        println!(
+            "    Arquivos filtrados: {} -> {} ({} removidos)",
+            original_count,
+            filtered_count,
+            original_count - filtered_count
+        );
+    }
 
     // Contagem de Tokens de Entrada
     let mut total_input_tokens = 0;
@@ -80,19 +99,71 @@ pub fn run_scip_conversion(scip_path: &Path, config: YcgConfig) -> Result<String
     println!("Input Total Tokens (Código Bruto): {}", total_input_tokens);
 
     // Gera o grafo padrão (Flat)
-    let graph = convert_scip_to_ycg(index, &config);
+    let mut graph = convert_scip_to_ycg(index, &config);
 
-    // Decide qual formato serializar
-    let yaml = if config.compact {
-        println!(">>> Otimizando Grafo: Aplicando Lista de Adjacência...");
-        let optimized_graph = optimize_graph(graph);
-        serde_yaml::to_string(&optimized_graph)?
-    } else {
-        serde_yaml::to_string(&graph)?
+    // STEP 2: Semantic Filtering / Graph Compaction (Requirements 1.1-1.8)
+    // Apply semantic filtering if compact mode is enabled
+    if config.compact {
+        println!(">>> Aplicando compactação semântica do grafo...");
+        let original_nodes = graph.definitions.len();
+        let original_edges = graph.references.len();
+        semantic_filter::SemanticFilter::filter_graph(&mut graph);
+        let filtered_nodes = graph.definitions.len();
+        let filtered_edges = graph.references.len();
+        println!(
+            "    Nós: {} -> {} ({:.1}% redução)",
+            original_nodes,
+            filtered_nodes,
+            (1.0 - filtered_nodes as f64 / original_nodes as f64) * 100.0
+        );
+        println!(
+            "    Arestas: {} -> {} ({:.1}% redução)",
+            original_edges,
+            filtered_edges,
+            (1.0 - filtered_edges as f64 / original_edges as f64) * 100.0
+        );
+    }
+
+    // STEP 3: Framework Noise Reduction (Requirements 2.1-2.6)
+    // Apply framework noise filtering if enabled
+    if config.ignore_framework_noise {
+        println!(">>> Removendo ruído de framework...");
+        let original_nodes = graph.definitions.len();
+        framework_filter::FrameworkNoiseFilter::filter_graph(&mut graph);
+        let filtered_nodes = graph.definitions.len();
+        println!(
+            "    Nós após remoção de boilerplate: {} -> {} ({} removidos)",
+            original_nodes,
+            filtered_nodes,
+            original_nodes - filtered_nodes
+        );
+    }
+
+    // STEP 4: Format Selection (Requirements 3.1-3.5)
+    // Serialize based on output format
+    let output = match config.output_format {
+        model::OutputFormat::AdHoc => {
+            println!(">>> Serializando em formato Ad-Hoc...");
+            // Convert to ad-hoc format
+            // Note: Ad-hoc format always uses the graph as-is (not optimized)
+            // because it already uses adjacency list internally
+            let adhoc_graph = adhoc_format::AdHocSerializer::serialize_graph(&graph);
+            serde_yaml::to_string(&adhoc_graph)?
+        }
+        model::OutputFormat::Yaml => {
+            // Standard YAML format
+            if config.compact {
+                println!(">>> Otimizando Grafo: Aplicando Lista de Adjacência...");
+                let optimized_graph = optimize_graph(graph);
+                serde_yaml::to_string(&optimized_graph)?
+            } else {
+                serde_yaml::to_string(&graph)?
+            }
+        }
     };
 
     // Contagem de Tokens de Saída
-    let output_tokens = count_tokens(&yaml);
+    let output_tokens = count_tokens(&output);
     println!("Output Total Tokens (Grafo YAML): {}", output_tokens);
 
     if total_input_tokens > 0 {
@@ -101,7 +172,7 @@ pub fn run_scip_conversion(scip_path: &Path, config: YcgConfig) -> Result<String
     }
     println!("--------------------------");
 
-    Ok(yaml)
+    Ok(output)
 }
 
 // Transformador: Flat List -> Adjacency List
