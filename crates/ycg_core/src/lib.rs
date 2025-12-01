@@ -1,6 +1,7 @@
 // crates/ycg_core/src/lib.rs
 pub mod config;
 pub mod enricher;
+pub mod file_filter;
 pub mod model;
 
 pub mod scip_proto {
