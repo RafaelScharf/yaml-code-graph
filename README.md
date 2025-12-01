@@ -12,6 +12,8 @@
 
 New to YCG? Check out the [Quick Start Guide](QUICKSTART.md) for a 5-minute tutorial!
 
+For complete CLI documentation, see the [CLI Reference](CLI_REFERENCE.md).
+
 ### One-Command Workflow
 
 ```bash
@@ -605,6 +607,16 @@ Taxa de Compressão: 1.61x
 - [ ] Python grammar support
 - [ ] Property-based testing suite
 - [ ] Configuration file support
+
+## 📚 Documentation
+
+- **[CLI Reference](CLI_REFERENCE.md)** - Complete command-line interface documentation
+- **[Quick Start Guide](QUICKSTART.md)** - 5-minute tutorial
+- **[Granularity Guide](GRANULARITY_GUIDE.md)** - Ad-hoc granularity levels explained
+- **[Optimization Guide](OPTIMIZATION_GUIDE.md)** - Token optimization strategies
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Installation Guide](INSTALL.md)** - Detailed installation instructions
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
 
 ## 🔧 Troubleshooting
 
