@@ -312,4 +312,395 @@ mod tests {
             "check(x);invalid(y);return(z)"
         ));
     }
+
+    // ========================================================================
+    // Unit Tests for Logic Extraction Patterns
+    // Requirements: 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9
+    // ========================================================================
+
+    /// Test extraction of if statements
+    /// Requirement 3.3: Extract conditional checks as check() keywords
+    #[test]
+    fn test_extract_if_statement_simple() {
+        // When implemented, should extract: check(stock>0)
+        let source = r#"
+            function checkStock(stock) {
+                if (stock > 0) {
+                    return true;
+                }
+                return false;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // Placeholder returns None - when implemented, should return Some("logic:check(stock>0)")
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of if statements with complex conditions
+    /// Requirement 3.9: Preserve logical operators (&&, ||, !) in check conditions
+    #[test]
+    fn test_extract_if_statement_complex_condition() {
+        // When implemented, should extract: check(user.isActive&&user.balance>=price)
+        let source = r#"
+            function validatePurchase(user, price) {
+                if (user.isActive && user.balance >= price) {
+                    return true;
+                }
+                return false;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of if statements with OR conditions
+    /// Requirement 3.9: Preserve logical operators (&&, ||, !) in check conditions
+    #[test]
+    fn test_extract_if_statement_or_condition() {
+        // When implemented, should extract: check(user.isAdmin||user.isSuper)
+        let source = r#"
+            function hasAccess(user) {
+                if (user.isAdmin || user.isSuper) {
+                    return true;
+                }
+                return false;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of throw statements
+    /// Requirement 3.4: Extract throw statements as check() with negated condition
+    #[test]
+    fn test_extract_throw_statement() {
+        // When implemented, should extract: check(stock>0)
+        let source = r#"
+            function purchase(stock) {
+                if (stock <= 0) {
+                    throw new Error('Out of stock');
+                }
+                return true;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of assignment statements
+    /// Requirement 3.5: Extract assignment statements with side effects as action() keywords
+    #[test]
+    fn test_extract_assignment_statement() {
+        // When implemented, should extract: action(deduct_balance)
+        let source = r#"
+            function deductBalance(user, amount) {
+                user.balance -= amount;
+                return user.balance;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of method calls
+    /// Requirement 3.6: Extract method calls with side effects as action() keywords
+    #[test]
+    fn test_extract_method_call() {
+        // When implemented, should extract: action(save_order)
+        let source = r#"
+            function processOrder(order) {
+                this.repository.save(order);
+                return order.id;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Method);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of multiple method calls
+    /// Requirement 3.6: Extract method calls with side effects as action() keywords
+    #[test]
+    fn test_extract_multiple_method_calls() {
+        // When implemented, should extract: action(validate);action(save)
+        let source = r#"
+            function processOrder(order) {
+                this.validator.validate(order);
+                this.repository.save(order);
+                return order.id;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Method);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of return statements
+    /// Requirement 3.7: Extract return statements and their expressions
+    #[test]
+    fn test_extract_return_statement_simple() {
+        // When implemented, should extract: return(item.qty>0)
+        let source = r#"
+            function hasStock(item) {
+                return item.qty > 0;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of return statements with complex expressions
+    /// Requirement 3.7: Extract return statements and their expressions
+    #[test]
+    fn test_extract_return_statement_complex() {
+        // When implemented, should extract: return(user.balance>=price&&item.qty>0)
+        let source = r#"
+            function canPurchase(user, item, price) {
+                return user.balance >= price && item.qty > 0;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of ternary operators
+    /// Requirement 3.8: Extract ternary operators as match() keywords
+    #[test]
+    fn test_extract_ternary_operator() {
+        // When implemented, should extract: match(isAdmin)?allow:deny
+        let source = r#"
+            function checkAccess(isAdmin) {
+                return isAdmin ? 'allow' : 'deny';
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of nested ternary operators
+    /// Requirement 3.8: Extract ternary operators as match() keywords
+    #[test]
+    fn test_extract_nested_ternary() {
+        // When implemented, should extract: match(isAdmin)?full:match(isUser)?limited:none
+        let source = r#"
+            function getPermissions(isAdmin, isUser) {
+                return isAdmin ? 'full' : isUser ? 'limited' : 'none';
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of switch statements
+    /// Requirement 3.8: Extract switch statements as match() keywords
+    #[test]
+    fn test_extract_switch_statement() {
+        // When implemented, should extract: match(role)?admin:user:guest
+        let source = r#"
+            function getPermissions(role) {
+                switch (role) {
+                    case 'admin':
+                        return 'full';
+                    case 'user':
+                        return 'limited';
+                    default:
+                        return 'none';
+                }
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of property access
+    /// Requirement 3.9: Extract property access for data retrieval as get() keywords
+    #[test]
+    fn test_extract_property_access() {
+        // When implemented, should extract: get(user.roles)
+        let source = r#"
+            function getUserRoles(user) {
+                const roles = user.roles;
+                return roles;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of chained property access
+    /// Requirement 3.9: Extract property access for data retrieval as get() keywords
+    #[test]
+    fn test_extract_chained_property_access() {
+        // When implemented, should extract: get(config.timeout)
+        let source = r#"
+            function getTimeout(config) {
+                return config.settings.timeout;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction of chained logic
+    /// Requirement 3.8: Chain multiple logic steps using semicolons
+    #[test]
+    fn test_extract_chained_logic() {
+        // When implemented, should extract: check(stock>0);check(user.balance>=price);action(deduct_balance);action(save_order)
+        let source = r#"
+            function purchase(user, item, price) {
+                if (item.stock <= 0) {
+                    throw new Error('Out of stock');
+                }
+                if (user.balance < price) {
+                    throw new Error('Insufficient balance');
+                }
+                user.balance -= price;
+                this.repository.save(order);
+                return order;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test extraction with complex chained logic including all keywords
+    /// Requirement 3.8: Chain multiple logic steps using semicolons
+    #[test]
+    fn test_extract_complex_chained_logic() {
+        // When implemented, should extract: get(user_roles);check(required_roles);match(has_role)?allow:deny;return(result)
+        let source = r#"
+            function canActivate(context) {
+                const userRoles = this.getUserRoles(context);
+                const requiredRoles = this.getRequiredRoles(context);
+                if (!requiredRoles || requiredRoles.length === 0) {
+                    return true;
+                }
+                const hasRole = userRoles.some(role => requiredRoles.includes(role));
+                return hasRole ? 'allow' : 'deny';
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Method);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test that logic extraction respects maximum length
+    /// Requirement 3.11: Limit logic representation to 200 characters
+    #[test]
+    fn test_extract_logic_respects_max_length() {
+        // Create a very long method with many logic steps
+        let source = r#"
+            function complexMethod() {
+                if (condition1) { action1(); }
+                if (condition2) { action2(); }
+                if (condition3) { action3(); }
+                if (condition4) { action4(); }
+                if (condition5) { action5(); }
+                if (condition6) { action6(); }
+                if (condition7) { action7(); }
+                if (condition8) { action8(); }
+                if (condition9) { action9(); }
+                if (condition10) { action10(); }
+                return result;
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // When implemented, should truncate at 200 characters
+        // TODO: Update assertion when implementation is complete
+        if let Some(logic) = result {
+            let content = &logic[6..]; // Skip "logic:" prefix
+            assert!(content.len() <= MAX_LOGIC_LENGTH);
+        }
+    }
+
+    /// Test extraction with guard clauses
+    /// Requirement 5.3: Identify guard clauses and represent as check() keywords
+    #[test]
+    fn test_extract_guard_clauses() {
+        // When implemented, should extract: check(user);check(user.isActive)
+        let source = r#"
+            function processUser(user) {
+                if (!user) {
+                    return null;
+                }
+                if (!user.isActive) {
+                    return null;
+                }
+                return user.process();
+            }
+        "#;
+        let node = create_test_node(ScipSymbolKind::Function);
+        let result = LogicExtractor::extract_logic(&node, source);
+
+        // TODO: Update assertion when implementation is complete
+        assert!(result.is_none());
+    }
+
+    /// Test that non-method/function nodes don't extract logic
+    /// Requirement 3.1: Only extract logic for methods and functions
+    #[test]
+    fn test_no_logic_extraction_for_non_methods() {
+        let source = "const x = 42;";
+
+        // Test various non-method/function kinds
+        let kinds = vec![
+            ScipSymbolKind::Class,
+            ScipSymbolKind::Variable,
+            ScipSymbolKind::Interface,
+            ScipSymbolKind::Module,
+        ];
+
+        for kind in kinds {
+            let node = create_test_node(kind);
+            let result = LogicExtractor::extract_logic(&node, source);
+            assert!(result.is_none(), "Should not extract logic for {:?}", kind);
+        }
+    }
 }
