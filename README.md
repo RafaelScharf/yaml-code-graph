@@ -40,6 +40,17 @@ YCG implements a hybrid two-pass pipeline:
 
 ## 📦 Installation
 
+### Quick Install
+
+```bash
+git clone https://github.com/yourusername/ycg.git
+cd ycg
+cargo build --release
+sudo ./install.sh
+```
+
+This installs the `ycg` command globally. See [INSTALL.md](INSTALL.md) for detailed installation options.
+
 ### Prerequisites
 - **Rust 1.75+** with Cargo
 - **SCIP Indexer** for your target language:
@@ -48,15 +59,11 @@ YCG implements a hybrid two-pass pipeline:
   # Or: scip-python, scip-java, etc.
   ```
 
-### Build from Source
+### Alternative: Cargo Install
 
 ```bash
-git clone https://github.com/yourusername/ycg.git
-cd ycg
-cargo build --release
+cargo install --path crates/ycg_cli
 ```
-
-The binary will be available at `./target/release/ycg_cli`
 
 ## 🛠️ Usage
 
@@ -77,16 +84,16 @@ Convert the SCIP index to optimized YAML:
 
 ```bash
 # Standard mode (flat list of edges)
-ycg_cli -i index.scip -o graph.yaml
+ycg -i index.scip -o graph.yaml
 
 # Compact mode (adjacency list - recommended)
-ycg_cli -i index.scip -o graph.yaml --compact
+ycg -i index.scip -o graph.yaml --compact
 
 # High detail mode (includes locals and externals)
-ycg_cli -i index.scip -o graph.yaml --lod 2
+ycg -i index.scip -o graph.yaml --lod 2
 
 # Specify project root explicitly
-ycg_cli -i index.scip -o graph.yaml --root /path/to/project
+ycg -i index.scip -o graph.yaml --root /path/to/project
 ```
 
 ### CLI Options
