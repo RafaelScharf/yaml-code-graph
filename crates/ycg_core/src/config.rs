@@ -32,6 +32,18 @@ impl ConfigLoader {
 
     /// Merge file configuration with CLI arguments
     /// CLI arguments take precedence over file configuration
+    ///
+    /// # Arguments
+    /// * `file_config` - Configuration loaded from file (if exists)
+    /// * `cli_compact` - CLI --compact flag
+    /// * `cli_output_format` - CLI --output-format flag
+    /// * `cli_ignore_framework_noise` - CLI --ignore-framework-noise flag
+    /// * `cli_include_patterns` - CLI --include patterns
+    /// * `cli_exclude_patterns` - CLI --exclude patterns
+    /// * `cli_no_gitignore` - CLI --no-gitignore flag
+    /// * `cli_adhoc_granularity` - Granularity determined from CLI flags
+    ///
+    /// **Requirements: 7.1, 7.2**
     pub fn merge_with_cli(
         file_config: Option<YcgConfigFile>,
         cli_compact: Option<bool>,
@@ -40,6 +52,7 @@ impl ConfigLoader {
         cli_include_patterns: Vec<String>,
         cli_exclude_patterns: Vec<String>,
         cli_no_gitignore: bool,
+        cli_adhoc_granularity: Option<crate::model::AdHocGranularity>,
     ) -> Result<MergedConfig> {
         let mut merged = MergedConfig::default();
 
@@ -54,6 +67,13 @@ impl ConfigLoader {
             }
             if let Some(ignore_noise) = file_cfg.output.ignore_framework_noise {
                 merged.ignore_framework_noise = ignore_noise;
+            }
+            // Parse adhoc granularity from config file
+            // Requirements: 7.1, 7.3, 7.4, 7.5
+            if let Some(granularity_str) = file_cfg.output.adhoc_granularity {
+                merged.adhoc_granularity =
+                    crate::model::AdHocGranularity::from_str(&granularity_str)
+                        .map_err(|e| anyhow::anyhow!("{}", e))?;
             }
 
             // File filter settings
@@ -86,6 +106,12 @@ impl ConfigLoader {
         }
         if cli_no_gitignore {
             merged.file_filter.use_gitignore = false;
+        }
+
+        // CLI granularity overrides file config
+        // Requirement 7.2: CLI precedence over config file
+        if let Some(granularity) = cli_adhoc_granularity {
+            merged.adhoc_granularity = granularity;
         }
 
         Ok(merged)
@@ -128,6 +154,7 @@ pub struct MergedConfig {
     pub output_format: OutputFormat,
     pub ignore_framework_noise: bool,
     pub file_filter: FileFilterConfig,
+    pub adhoc_granularity: crate::model::AdHocGranularity,
 }
 
 impl Default for MergedConfig {
@@ -141,6 +168,7 @@ impl Default for MergedConfig {
                 exclude_patterns: Vec::new(),
                 use_gitignore: true, // Default to respecting gitignore
             },
+            adhoc_granularity: crate::model::AdHocGranularity::default(),
         }
     }
 }
