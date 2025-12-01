@@ -60,14 +60,17 @@ impl TypeAbbreviator {
         // Requirement 4.7: Preserve generic type parameters
         if let Some(generic_start) = type_str.find('<') {
             if let Some(generic_end) = type_str.rfind('>') {
-                let base = &type_str[..generic_start];
-                let generic_params = &type_str[generic_start + 1..generic_end];
+                // Validate that the indices are correct
+                if generic_start < generic_end && generic_end <= type_str.len() {
+                    let base = &type_str[..generic_start];
+                    let generic_params = &type_str[generic_start + 1..generic_end];
 
-                // Abbreviate base and params
-                let abbrev_base = Self::abbreviate_simple(base);
-                let abbrev_params = Self::abbreviate_generic_params(generic_params);
+                    // Abbreviate base and params
+                    let abbrev_base = Self::abbreviate_simple(base);
+                    let abbrev_params = Self::abbreviate_generic_params(generic_params);
 
-                return format!("{}<{}>", abbrev_base, abbrev_params);
+                    return format!("{}<{}>", abbrev_base, abbrev_params);
+                }
             }
         }
 
