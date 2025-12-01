@@ -2,6 +2,7 @@
 pub mod config;
 pub mod enricher;
 pub mod file_filter;
+pub mod framework_filter;
 pub mod model;
 pub mod semantic_filter;
 
