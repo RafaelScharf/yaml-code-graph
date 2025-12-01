@@ -6,7 +6,7 @@ mod baseline_helpers;
 
 use anyhow::Result;
 use std::path::PathBuf;
-use ycg_core::model::{FileFilterConfig, OutputFormat};
+use ycg_core::model::{AdHocGranularity, FileFilterConfig, OutputFormat};
 use ycg_core::{LevelOfDetail, YcgConfig, run_scip_conversion};
 
 /// Test that default configuration produces output matching baseline
@@ -38,6 +38,7 @@ fn test_simple_ts_medium_backward_compatibility() -> Result<()> {
             exclude_patterns: vec![],
             use_gitignore: false,
         },
+        adhoc_granularity: AdHocGranularity::default(), // Default: Level 0
     };
 
     let current_output = run_scip_conversion(&scip_path, config)?;
@@ -120,6 +121,7 @@ fn test_all_baselines_backward_compatibility() -> Result<()> {
                 exclude_patterns: vec![],
                 use_gitignore: false,
             },
+            adhoc_granularity: AdHocGranularity::default(),
         };
 
         let current_output = match run_scip_conversion(&scip_path, config) {
