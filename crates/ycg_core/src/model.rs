@@ -9,12 +9,12 @@ pub struct YcgGraph {
     pub metadata: ProjectMetadata,
     #[serde(rename = "_defs")]
     pub definitions: Vec<SymbolNode>,
-    #[serde(rename = "graph", skip_serializing_if = "Vec::is_empty")]
+    #[serde(rename = "graph", skip_serializing_if = "Vec::is_empty", default)]
     pub references: Vec<ReferenceEdge>,
 }
 
 // --- MODELO OTIMIZADO (Adjacency List) ---
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct YcgGraphOptimized {
     #[serde(rename = "_meta")]
     pub metadata: ProjectMetadata,

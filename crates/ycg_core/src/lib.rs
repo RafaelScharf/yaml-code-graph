@@ -6,6 +6,7 @@ pub mod file_filter;
 pub mod framework_filter;
 pub mod model;
 pub mod semantic_filter;
+pub mod validators;
 
 pub mod scip_proto {
     include!(concat!(env!("OUT_DIR"), "/scip.rs"));
