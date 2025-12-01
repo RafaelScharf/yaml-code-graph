@@ -47,3 +47,10 @@ prost-build = "0.12" # Compila o .proto para Rust
 # Dependências para testes
 [dev-dependencies]
 tempfile = "3.0" # Temporary files for tests
+criterion = { version = "0.5", features = [
+    "html_reports",
+] } # Benchmarking framework
+
+[[bench]]
+name = "granularity_benchmarks"
+harness = false

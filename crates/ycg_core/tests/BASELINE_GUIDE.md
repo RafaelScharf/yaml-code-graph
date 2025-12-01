@@ -162,7 +162,7 @@ cargo test --test baseline_generator -- --ignored
 
 ### Problem: SCIP index missing
 ```
-⚠ Skipping: SCIP file not found at "../../examples/simple-ts/index.scip"
+⚠ Skipping: SCIP file not found at "../../../examples/simple-ts/index.scip"
 ```
 **Solution:**
 ```bash

@@ -24,8 +24,8 @@ fn test_simple_ts_medium_backward_compatibility() -> Result<()> {
     let baseline = baseline_helpers::load_baseline("simple_ts_medium")?;
 
     // Generate current output with default configuration
-    let scip_path = PathBuf::from("../../examples/simple-ts/index.scip");
-    let project_root = PathBuf::from("../../examples/simple-ts");
+    let scip_path = PathBuf::from("../../../examples/simple-ts/index.scip");
+    let project_root = PathBuf::from("../../../examples/simple-ts");
 
     let config = YcgConfig {
         lod: LevelOfDetail::Medium,
@@ -107,8 +107,8 @@ fn test_all_baselines_backward_compatibility() -> Result<()> {
         };
 
         // Generate current output
-        let scip_path = PathBuf::from(format!("../../examples/{}/index.scip", example_dir));
-        let project_root = PathBuf::from(format!("../../examples/{}", example_dir));
+        let scip_path = PathBuf::from(format!("../../../examples/{}/index.scip", example_dir));
+        let project_root = PathBuf::from(format!("../../../examples/{}", example_dir));
 
         if !scip_path.exists() {
             println!("    ⚠ Skipping: SCIP file not found");

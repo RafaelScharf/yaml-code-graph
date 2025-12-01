@@ -132,7 +132,7 @@ Current test coverage includes:
 
 ### SCIP file not found
 ```
-⚠ Skipping: SCIP file not found at "../../examples/simple-ts/index.scip"
+⚠ Skipping: SCIP file not found at "../../../examples/simple-ts/index.scip"
 ```
 **Solution:** Generate SCIP indices for example projects:
 ```bash

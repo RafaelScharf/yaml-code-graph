@@ -21,7 +21,7 @@ struct BaselineTestCase {
 
 impl BaselineTestCase {
     fn new(name: &'static str, example_dir: &str, lod: LevelOfDetail) -> Self {
-        let project_root = PathBuf::from("../../examples").join(example_dir);
+        let project_root = PathBuf::from("../../../examples").join(example_dir);
         let scip_path = project_root.join("index.scip");
 
         Self {
@@ -40,7 +40,7 @@ impl BaselineTestCase {
         lod: LevelOfDetail,
         granularity: AdHocGranularity,
     ) -> Self {
-        let project_root = PathBuf::from("../../examples").join(example_dir);
+        let project_root = PathBuf::from("../../../examples").join(example_dir);
         let scip_path = project_root.join("index.scip");
 
         Self {

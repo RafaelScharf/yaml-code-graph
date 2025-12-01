@@ -30,8 +30,8 @@ fn test_adhoc_default_matches_baseline_simple_ts() -> Result<()> {
     let baseline = baseline_helpers::load_baseline("simple_ts_high_adhoc_default")?;
 
     // Generate current output with default granularity
-    let scip_path = PathBuf::from("../../examples/simple-ts/index.scip");
-    let project_root = PathBuf::from("../../examples/simple-ts");
+    let scip_path = PathBuf::from("../../../examples/simple-ts/index.scip");
+    let project_root = PathBuf::from("../../../examples/simple-ts");
 
     let config = YcgConfig {
         lod: LevelOfDetail::High,
@@ -90,8 +90,8 @@ fn test_adhoc_default_matches_baseline_nestjs() -> Result<()> {
     let baseline = baseline_helpers::load_baseline("nestjs_high_adhoc_default")?;
 
     // Generate current output with default granularity
-    let scip_path = PathBuf::from("../../examples/nestjs-api-ts/index.scip");
-    let project_root = PathBuf::from("../../examples/nestjs-api-ts");
+    let scip_path = PathBuf::from("../../../examples/nestjs-api-ts/index.scip");
+    let project_root = PathBuf::from("../../../examples/nestjs-api-ts");
 
     let config = YcgConfig {
         lod: LevelOfDetail::High,
@@ -273,8 +273,8 @@ fn test_existing_adhoc_format_works() -> Result<()> {
     // This test verifies that the existing ad-hoc format (without granularity)
     // continues to work as expected
 
-    let scip_path = PathBuf::from("../../examples/simple-ts/index.scip");
-    let project_root = PathBuf::from("../../examples/simple-ts");
+    let scip_path = PathBuf::from("../../../examples/simple-ts/index.scip");
+    let project_root = PathBuf::from("../../../examples/simple-ts");
 
     if !scip_path.exists() {
         println!("⚠ Skipping: SCIP file not found");
@@ -315,8 +315,8 @@ fn test_existing_adhoc_format_works() -> Result<()> {
 /// **Validates: Requirements 1.1, 2.1, 3.1**
 #[test]
 fn test_all_granularity_levels_produce_valid_output() -> Result<()> {
-    let scip_path = PathBuf::from("../../examples/simple-ts/index.scip");
-    let project_root = PathBuf::from("../../examples/simple-ts");
+    let scip_path = PathBuf::from("../../../examples/simple-ts/index.scip");
+    let project_root = PathBuf::from("../../../examples/simple-ts");
 
     if !scip_path.exists() {
         println!("⚠ Skipping: SCIP file not found");
