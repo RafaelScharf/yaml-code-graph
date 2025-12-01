@@ -12,6 +12,18 @@
 
 New to YCG? Check out the [Quick Start Guide](QUICKSTART.md) for a 5-minute tutorial!
 
+### One-Command Workflow
+
+```bash
+# Automatic language detection and indexing
+ycg index
+
+# Generate optimized YAML graph
+ycg generate -i index.scip -o graph.yaml --compact
+```
+
+That's it! YCG automatically detects your project language (Rust or TypeScript) and generates the semantic graph.
+
 ## Why YCG?
 
 Traditional code context (raw files) is inefficient and noisy for LLMs. YCG addresses this by:
@@ -71,36 +83,79 @@ cargo install --path crates/ycg_cli
 
 ## 🛠️ Usage
 
-### Step 1: Generate SCIP Index
+### Quick Start (Automatic Indexing)
 
-Navigate to your project and create the index:
+YCG can automatically detect your project language and generate the SCIP index:
 
 ```bash
 cd my-project
-npm install  # Install dependencies first
-scip-typescript index .
-# Creates 'index.scip' in current directory
+
+# Automatically detect language and generate index + graph
+ycg index                           # Creates index.scip
+ycg generate -i index.scip -o graph.yaml --compact
 ```
 
-### Step 2: Run YCG
+### Step 1: Generate SCIP Index
+
+**Option A: Automatic (Recommended)**
+
+```bash
+cd my-project
+ycg index                           # Auto-detects Rust or TypeScript
+ycg index -d ./src -o custom.scip   # Custom directory and output
+```
+
+**Option B: Manual**
+
+Navigate to your project and create the index manually:
+
+```bash
+cd my-project
+
+# For TypeScript/JavaScript projects
+npm install  # Install dependencies first
+scip-typescript index .
+
+# For Rust projects
+rust-analyzer scip-export --output index.scip
+```
+
+### Step 2: Generate YAML Graph
 
 Convert the SCIP index to optimized YAML:
 
 ```bash
 # Standard mode (flat list of edges)
-ycg -i index.scip -o graph.yaml
+ycg generate -i index.scip -o graph.yaml
 
 # Compact mode (adjacency list - recommended)
-ycg -i index.scip -o graph.yaml --compact
+ycg generate -i index.scip -o graph.yaml --compact
 
 # High detail mode (includes locals and externals)
-ycg -i index.scip -o graph.yaml --lod 2
+ycg generate -i index.scip -o graph.yaml --lod 2
 
 # Specify project root explicitly
-ycg -i index.scip -o graph.yaml --root /path/to/project
+ycg generate -i index.scip -o graph.yaml --root /path/to/project
 ```
 
-### CLI Options
+### CLI Commands
+
+#### `ycg index`
+
+Automatically detect project language and generate SCIP index.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-d, --directory` | Project directory to index | `.` (current) |
+| `-o, --output` | Output path for SCIP index | `index.scip` |
+
+**Supported Languages:**
+- **Rust**: Detects `Cargo.toml`, uses `rust-analyzer`
+- **TypeScript/JavaScript**: Detects `package.json`, uses `scip-typescript`
+
+#### `ycg generate`
+
+Generate YAML graph from existing SCIP index.
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -183,19 +238,34 @@ ycg/
 
 The `examples/` directory contains sample projects:
 
-### NestJS API Example
+### NestJS API Example (Automatic)
+```bash
+cd examples/nestjs-api-ts
+npm install
+ycg index                                    # Auto-detects TypeScript
+ycg generate -i index.scip -o context_map.yaml --compact
+```
+
+### NestJS API Example (Manual)
 ```bash
 cd examples/nestjs-api-ts
 npm install
 scip-typescript index .
-../../target/release/ycg_cli -i index.scip -o context_map.yaml --compact
+../../target/release/ycg_cli generate -i index.scip -o context_map.yaml --compact
 ```
 
 ### Simple TypeScript Example
 ```bash
 cd examples/simple-ts
-scip-typescript index .
-../../target/release/ycg_cli -i index.scip -o output.yaml
+ycg index                                    # Auto-detects TypeScript
+ycg generate -i index.scip -o output.yaml
+```
+
+### Rust Project Example (Dogfooding)
+```bash
+cd /path/to/ycg
+ycg index                                    # Auto-detects Rust
+ycg generate -i index.scip -o ycg_graph.yaml --compact --lod 2
 ```
 
 ## 📈 Performance Metrics
@@ -223,6 +293,15 @@ Taxa de Compressão: 1.61x
 - [ ] Python grammar support
 - [ ] Property-based testing suite
 - [ ] Configuration file support
+
+## 🔧 Troubleshooting
+
+Having issues? Check the [Troubleshooting Guide](TROUBLESHOOTING.md) for common problems and solutions:
+
+- Language detection issues
+- Missing indexer tools (rust-analyzer, scip-typescript)
+- SCIP export failures
+- Performance optimization tips
 
 ## 🤝 Contributing
 

@@ -46,18 +46,24 @@ const user = new User("Alice", 25);
 console.log(greet(user.name));
 ```
 
-### 3. Generate SCIP Index
+### 3. Generate SCIP Index and YCG Graph
+
+**Option A: Automatic (Recommended)**
 
 ```bash
-npx scip-typescript index .
+# YCG automatically detects TypeScript and generates the index
+ycg index
+ycg generate -i index.scip -o graph.yaml --compact
 ```
 
-This creates `index.scip` in your project directory.
-
-### 4. Run YCG
+**Option B: Manual**
 
 ```bash
-ycg -i index.scip -o graph.yaml --compact
+# Generate SCIP index manually
+npx scip-typescript index .
+
+# Generate YCG graph
+ycg generate -i index.scip -o graph.yaml --compact
 ```
 
 ### 5. View the Output
@@ -125,8 +131,9 @@ graph:
 ### Use Case 1: Feed to LLM for Code Understanding
 
 ```bash
-# Generate compact graph
-ycg -i index.scip -o context.yaml --compact
+# One-command workflow
+ycg index
+ycg generate -i index.scip -o context.yaml --compact
 
 # Use context.yaml as LLM context instead of raw code files
 # Result: 60-75% fewer tokens with better semantic understanding
@@ -135,11 +142,14 @@ ycg -i index.scip -o context.yaml --compact
 ### Use Case 2: Analyze Large Codebase
 
 ```bash
+# Generate index once
+ycg index
+
 # Low detail for overview (classes and functions only)
-ycg -i index.scip -o overview.yaml --lod 0
+ycg generate -i index.scip -o overview.yaml --lod 0
 
 # High detail for deep analysis
-ycg -i index.scip -o detailed.yaml --lod 2
+ycg generate -i index.scip -o detailed.yaml --lod 2
 ```
 
 ### Use Case 3: CI/CD Integration
@@ -148,11 +158,9 @@ ycg -i index.scip -o detailed.yaml --lod 2
 #!/bin/bash
 # generate-context.sh
 
-# Generate SCIP index
-scip-typescript index .
-
-# Generate YCG graph
-ycg -i index.scip -o docs/code-graph.yaml --compact
+# Automatic indexing and graph generation
+ycg index -o index.scip
+ycg generate -i index.scip -o docs/code-graph.yaml --compact
 
 # Commit to repo for documentation
 git add docs/code-graph.yaml
@@ -183,10 +191,10 @@ wc -w graph.yaml
 
 ```bash
 # Generate SCIP for specific directory
-scip-typescript index ./src/core
+ycg index -d ./src/core -o core-index.scip
 
 # Process with YCG
-ycg -i index.scip -o core-graph.yaml --compact
+ycg generate -i core-index.scip -o core-graph.yaml --compact
 ```
 
 ### Tip 3: Use with Git Hooks
@@ -195,8 +203,10 @@ Create `.git/hooks/pre-commit`:
 
 ```bash
 #!/bin/bash
+# Auto-regenerate graph on commit
+ycg index -o index.scip 2>/dev/null
 if [ -f "index.scip" ]; then
-  ycg -i index.scip -o .ycg-cache/graph.yaml --compact
+  ycg generate -i index.scip -o .ycg-cache/graph.yaml --compact
 fi
 ```
 
@@ -209,11 +219,31 @@ Run the installation again:
 sudo ./install.sh
 ```
 
+### "Could not detect project language"
+
+Make sure you have `Cargo.toml` (Rust) or `package.json` (TypeScript/JavaScript):
+```bash
+ls Cargo.toml package.json
+```
+
+### "rust-analyzer not found" or "scip-typescript not found"
+
+Install the required indexer:
+```bash
+# For Rust
+rustup component add rust-analyzer
+
+# For TypeScript
+npm install -g @sourcegraph/scip-typescript
+```
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
+
 ### "Failed to read SCIP file"
 
 Make sure you generated the index first:
 ```bash
-scip-typescript index .
+ycg index
 ls -la index.scip  # Should exist
 ```
 
@@ -221,7 +251,7 @@ ls -la index.scip  # Should exist
 
 Check your LOD level. Try `--lod 2` for maximum detail:
 ```bash
-ycg -i index.scip -o graph.yaml --lod 2
+ycg generate -i index.scip -o graph.yaml --lod 2
 ```
 
 ## Support
