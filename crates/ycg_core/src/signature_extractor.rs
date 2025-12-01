@@ -258,6 +258,7 @@ impl SignatureExtractor {
     /// - "User | null" → "User?"
     /// - "string | undefined" → "str?"
     /// - "User | null | undefined" → "User?"
+    /// - "boolean | Promise<boolean> | Observable<boolean>" → "bool" (takes first type for simplicity)
     ///
     /// **Validates: Requirement 2.4**
     fn normalize_optional_type(type_str: &str) -> String {
@@ -276,8 +277,10 @@ impl SignatureExtractor {
                 // Single type with null/undefined → make it optional
                 return format!("{}?", parts[0]);
             } else if parts.len() > 1 {
-                // Multiple types with null/undefined → keep union but mark optional
-                return format!("({})?", parts.join("|"));
+                // Multiple types in union (e.g., boolean | Promise<boolean> | Observable<boolean>)
+                // For compactness, take the first type only
+                // This is a simplification for token efficiency
+                return parts[0].to_string();
             }
         }
 
@@ -431,9 +434,9 @@ mod tests {
 
     #[test]
     fn test_normalize_optional_type_union() {
-        // Multiple types with null should preserve union
+        // Multiple types with null - for compactness, take first type only
         let result = SignatureExtractor::normalize_optional_type("User | Admin | null");
-        assert_eq!(result, "(User|Admin)?");
+        assert_eq!(result, "User");
     }
 
     #[test]
