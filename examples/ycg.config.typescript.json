@@ -1,0 +1,22 @@
+{
+    "output": {
+        "format": "yaml",
+        "compact": true,
+        "ignoreFrameworkNoise": true
+    },
+    "ignore": {
+        "useGitignore": true,
+        "customPatterns": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/*.test.ts",
+            "**/*.spec.ts",
+            "**/__tests__/**",
+            "**/__mocks__/**"
+        ]
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.tsx"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "output": {
+        "format": "yaml",
+        "compact": true,
+        "ignoreFrameworkNoise": false
+    },
+    "ignore": {
+        "useGitignore": true,
+        "customPatterns": [
+            "**/target/**",
+            "**/.git/**",
+            "**/Cargo.lock"
+        ]
+    },
+    "include": [
+        "src/**/*.rs",
+        "crates/**/src/**/*.rs"
+    ]
+}

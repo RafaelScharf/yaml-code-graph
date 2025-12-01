@@ -1,6 +1,6 @@
 [package]
 name = "ycg_cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -12,3 +12,5 @@ clap = { version = "4.4", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.0"
+assert_cmd = "2.0"
+predicates = "3.0"

@@ -35,6 +35,10 @@ pub enum YcgError {
     #[error("File filtering error: {0}")]
     FileFilter(#[from] FileFilterError),
 
+    /// Granularity-specific errors
+    #[error("Granularity error: {0}")]
+    Granularity(#[from] GranularityError),
+
     /// Generic errors (for compatibility with anyhow)
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -168,6 +172,44 @@ pub enum ValidationError {
     /// Invalid symbol definition
     #[error("Invalid symbol definition at index {index}: {reason}")]
     InvalidSymbolDefinition { index: usize, reason: String },
+}
+
+/// Granularity-specific errors
+///
+/// These errors occur during granularity configuration and processing.
+///
+/// **Validates: Requirements 6.5, 7.6**
+#[derive(Error, Debug)]
+pub enum GranularityError {
+    /// Invalid granularity level specified
+    ///
+    /// **Validates: Requirement 7.6**
+    #[error(
+        "Invalid granularity level: '{level}'. Valid options are: 'default', 'signatures', 'logic'"
+    )]
+    InvalidLevel { level: String },
+
+    /// Granularity flags used without ad-hoc format
+    ///
+    /// **Validates: Requirement 6.5**
+    #[error(
+        "Granularity flags (--adhoc-inline-signatures, --adhoc-inline-logic) require --output-format adhoc"
+    )]
+    RequiresAdHocFormat,
+
+    /// Signature extraction failed
+    #[error("Failed to extract signature for symbol '{symbol}': {reason}")]
+    SignatureExtractionFailed { symbol: String, reason: String },
+
+    /// Logic extraction failed
+    #[error("Failed to extract logic for symbol '{symbol}': {reason}")]
+    LogicExtractionFailed { symbol: String, reason: String },
+
+    /// Logic representation too long
+    #[error(
+        "Logic representation for '{symbol}' exceeds maximum length of {max_length} characters"
+    )]
+    LogicTooLong { symbol: String, max_length: usize },
 }
 
 /// File filtering errors
@@ -322,6 +364,33 @@ impl FileFilterError {
     }
 }
 
+impl GranularityError {
+    /// Create an InvalidLevel error
+    pub fn invalid_level(level: String) -> Self {
+        GranularityError::InvalidLevel { level }
+    }
+
+    /// Create a RequiresAdHocFormat error
+    pub fn requires_adhoc_format() -> Self {
+        GranularityError::RequiresAdHocFormat
+    }
+
+    /// Create a SignatureExtractionFailed error
+    pub fn signature_extraction_failed(symbol: String, reason: String) -> Self {
+        GranularityError::SignatureExtractionFailed { symbol, reason }
+    }
+
+    /// Create a LogicExtractionFailed error
+    pub fn logic_extraction_failed(symbol: String, reason: String) -> Self {
+        GranularityError::LogicExtractionFailed { symbol, reason }
+    }
+
+    /// Create a LogicTooLong error
+    pub fn logic_too_long(symbol: String, max_length: usize) -> Self {
+        GranularityError::LogicTooLong { symbol, max_length }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,5 +504,53 @@ mod tests {
         assert!(display.contains("All files were excluded"));
         assert!(display.contains("**/*.rs"));
         assert!(display.contains("**/*"));
+    }
+
+    #[test]
+    fn test_granularity_invalid_level_error() {
+        let err = GranularityError::invalid_level("invalid".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("invalid"));
+        assert!(display.contains("default"));
+        assert!(display.contains("signatures"));
+        assert!(display.contains("logic"));
+    }
+
+    #[test]
+    fn test_granularity_requires_adhoc_format_error() {
+        let err = GranularityError::requires_adhoc_format();
+        let display = format!("{}", err);
+        assert!(display.contains("--adhoc-inline-signatures"));
+        assert!(display.contains("--adhoc-inline-logic"));
+        assert!(display.contains("--output-format adhoc"));
+    }
+
+    #[test]
+    fn test_granularity_signature_extraction_failed() {
+        let err = GranularityError::signature_extraction_failed(
+            "MyClass::method".to_string(),
+            "parse error".to_string(),
+        );
+        let display = format!("{}", err);
+        assert!(display.contains("MyClass::method"));
+        assert!(display.contains("parse error"));
+    }
+
+    #[test]
+    fn test_granularity_logic_too_long() {
+        let err = GranularityError::logic_too_long("MyClass::method".to_string(), 200);
+        let display = format!("{}", err);
+        assert!(display.contains("MyClass::method"));
+        assert!(display.contains("200"));
+    }
+
+    #[test]
+    fn test_ycg_error_from_granularity_error() {
+        let granularity_err = GranularityError::invalid_level("bad".to_string());
+        let ycg_err: YcgError = granularity_err.into();
+
+        let display = format!("{}", ycg_err);
+        assert!(display.contains("Granularity error"));
+        assert!(display.contains("bad"));
     }
 }

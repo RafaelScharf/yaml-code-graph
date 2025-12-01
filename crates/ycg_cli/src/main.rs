@@ -66,6 +66,16 @@ enum Commands {
         /// Disable automatic gitignore processing
         #[arg(long)]
         no_gitignore: bool,
+
+        /// Enable inline signatures in ad-hoc format (Level 1: ID|Signature(args):Return|Type)
+        /// Requires --output-format adhoc
+        #[arg(long)]
+        adhoc_inline_signatures: bool,
+
+        /// Enable inline logic in ad-hoc format (Level 2: ID|Signature|Type|logic:steps)
+        /// Requires --output-format adhoc. Implicitly enables --adhoc-inline-signatures
+        #[arg(long)]
+        adhoc_inline_logic: bool,
     },
 }
 
@@ -85,6 +95,8 @@ fn main() -> Result<()> {
             include,
             exclude,
             no_gitignore,
+            adhoc_inline_signatures,
+            adhoc_inline_logic,
         } => handle_generate_command(
             input,
             output,
@@ -96,6 +108,8 @@ fn main() -> Result<()> {
             include,
             exclude,
             no_gitignore,
+            adhoc_inline_signatures,
+            adhoc_inline_logic,
         ),
     }
 }
@@ -238,8 +252,12 @@ fn handle_generate_command(
     include: Vec<String>,
     exclude: Vec<String>,
     no_gitignore: bool,
+    adhoc_inline_signatures: bool,
+    adhoc_inline_logic: bool,
 ) -> Result<()> {
     use ycg_core::config::ConfigLoader;
+    use ycg_core::errors::GranularityError;
+    use ycg_core::model::AdHocGranularity;
 
     let lod = match lod {
         0 => LevelOfDetail::Low,
@@ -260,6 +278,20 @@ fn handle_generate_command(
     let config_path = project_root.join("ycg.config.json");
     let file_config = ConfigLoader::load_from_file(&config_path)?;
 
+    // Determine ad-hoc granularity level from CLI flags BEFORE merge
+    // Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 7.2
+    let cli_adhoc_granularity = if adhoc_inline_logic {
+        // Level 2: Logic (implicitly includes signatures)
+        // Requirement 6.3: --adhoc-inline-logic implicitly activates signatures
+        Some(AdHocGranularity::InlineLogic)
+    } else if adhoc_inline_signatures {
+        // Level 1: Signatures
+        Some(AdHocGranularity::InlineSignatures)
+    } else {
+        // No CLI flag specified, will use config file or default
+        None
+    };
+
     // Merge file config with CLI arguments (CLI takes precedence)
     let cli_compact = if compact { Some(true) } else { None };
     let cli_ignore_framework_noise = if ignore_framework_noise {
@@ -276,10 +308,19 @@ fn handle_generate_command(
         include,
         exclude,
         no_gitignore,
+        cli_adhoc_granularity,
     )?;
 
     // Validate the merged configuration
     ConfigLoader::validate(&merged)?;
+
+    // Validate that granularity flags require adhoc format
+    // Requirement 6.5: Granularity flags require --output-format adhoc
+    if merged.adhoc_granularity != AdHocGranularity::Default
+        && merged.output_format != ycg_core::model::OutputFormat::AdHoc
+    {
+        return Err(GranularityError::requires_adhoc_format().into());
+    }
 
     let config = YcgConfig {
         lod,
@@ -288,6 +329,7 @@ fn handle_generate_command(
         output_format: merged.output_format,
         ignore_framework_noise: merged.ignore_framework_noise,
         file_filter: merged.file_filter,
+        adhoc_granularity: merged.adhoc_granularity,
     };
 
     println!("--- YCG: Processando {:?} ---", input);

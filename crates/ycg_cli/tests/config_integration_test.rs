@@ -59,6 +59,7 @@ fn test_cli_precedence_over_config() {
             format: Some("yaml".to_string()),
             compact: Some(false),
             ignore_framework_noise: Some(false),
+            adhoc_granularity: None,
         },
         ignore: IgnoreConfig {
             use_gitignore: Some(true),
@@ -76,6 +77,7 @@ fn test_cli_precedence_over_config() {
         vec!["**/*.rs".to_string()], // CLI include (overrides file's include)
         vec!["**/target/**".to_string()], // CLI exclude
         false,      // CLI no_gitignore = false (keeps gitignore enabled)
+        None,       // CLI adhoc_granularity (not specified)
     )
     .unwrap();
 
@@ -107,6 +109,7 @@ fn test_config_validation_detects_conflicts() {
             exclude_patterns: vec!["**/*.ts".to_string()], // Same pattern in both!
             use_gitignore: true,
         },
+        adhoc_granularity: ycg_core::model::AdHocGranularity::default(),
     };
 
     // Validation should fail
@@ -160,6 +163,7 @@ fn test_invalid_output_format() {
             format: None,
             compact: None,
             ignore_framework_noise: None,
+            adhoc_granularity: None,
         },
         ignore: IgnoreConfig {
             use_gitignore: None,
@@ -177,6 +181,7 @@ fn test_invalid_output_format() {
         vec![],
         vec![],
         false,
+        None, // CLI adhoc_granularity
     );
 
     // Should return an error
@@ -187,4 +192,122 @@ fn test_invalid_output_format() {
             .to_string()
             .contains("Invalid output format")
     );
+}
+
+#[test]
+fn test_cli_granularity_precedence_over_config() {
+    // Requirement 7.2: CLI precedence over config file for granularity
+    use ycg_core::config::ConfigLoader;
+    use ycg_core::model::{AdHocGranularity, IgnoreConfig, OutputConfig, YcgConfigFile};
+
+    // Create a file config with granularity = "default"
+    let file_config = YcgConfigFile {
+        output: OutputConfig {
+            format: Some("adhoc".to_string()),
+            compact: None,
+            ignore_framework_noise: None,
+            adhoc_granularity: Some("default".to_string()),
+        },
+        ignore: IgnoreConfig {
+            use_gitignore: None,
+            custom_patterns: None,
+        },
+        include: vec![],
+    };
+
+    // Merge with CLI granularity = InlineLogic (should override file's "default")
+    let merged = ConfigLoader::merge_with_cli(
+        Some(file_config),
+        None,
+        None,
+        None,
+        vec![],
+        vec![],
+        false,
+        Some(AdHocGranularity::InlineLogic), // CLI overrides file
+    )
+    .unwrap();
+
+    // Verify CLI value took precedence
+    assert_eq!(merged.adhoc_granularity, AdHocGranularity::InlineLogic);
+}
+
+#[test]
+fn test_config_file_granularity_when_no_cli() {
+    // Requirement 7.1: Config file granularity used when no CLI flag
+    use ycg_core::config::ConfigLoader;
+    use ycg_core::model::{AdHocGranularity, IgnoreConfig, OutputConfig, YcgConfigFile};
+
+    // Create a file config with granularity = "signatures"
+    let file_config = YcgConfigFile {
+        output: OutputConfig {
+            format: Some("adhoc".to_string()),
+            compact: None,
+            ignore_framework_noise: None,
+            adhoc_granularity: Some("signatures".to_string()),
+        },
+        ignore: IgnoreConfig {
+            use_gitignore: None,
+            custom_patterns: None,
+        },
+        include: vec![],
+    };
+
+    // Merge with no CLI granularity (None)
+    let merged = ConfigLoader::merge_with_cli(
+        Some(file_config),
+        None,
+        None,
+        None,
+        vec![],
+        vec![],
+        false,
+        None, // No CLI override
+    )
+    .unwrap();
+
+    // Verify file config value was used
+    assert_eq!(merged.adhoc_granularity, AdHocGranularity::InlineSignatures);
+}
+
+#[test]
+fn test_invalid_granularity_in_config_file() {
+    // Requirement 7.6: Invalid granularity value in config file
+    use ycg_core::config::ConfigLoader;
+    use ycg_core::model::{IgnoreConfig, OutputConfig, YcgConfigFile};
+
+    // Create a file config with invalid granularity
+    let file_config = YcgConfigFile {
+        output: OutputConfig {
+            format: Some("adhoc".to_string()),
+            compact: None,
+            ignore_framework_noise: None,
+            adhoc_granularity: Some("invalid_level".to_string()),
+        },
+        ignore: IgnoreConfig {
+            use_gitignore: None,
+            custom_patterns: None,
+        },
+        include: vec![],
+    };
+
+    // Merge should fail with clear error
+    let result = ConfigLoader::merge_with_cli(
+        Some(file_config),
+        None,
+        None,
+        None,
+        vec![],
+        vec![],
+        false,
+        None,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+    assert!(err_msg.contains("invalid_level"));
+    assert!(err_msg.contains("default"));
+    assert!(err_msg.contains("signatures"));
+    assert!(err_msg.contains("logic"));
 }

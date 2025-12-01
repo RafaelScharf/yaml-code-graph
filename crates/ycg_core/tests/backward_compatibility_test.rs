@@ -6,7 +6,7 @@ mod baseline_helpers;
 
 use anyhow::Result;
 use std::path::PathBuf;
-use ycg_core::model::{FileFilterConfig, OutputFormat};
+use ycg_core::model::{AdHocGranularity, FileFilterConfig, OutputFormat};
 use ycg_core::{LevelOfDetail, YcgConfig, run_scip_conversion};
 
 /// Test that default configuration produces output matching baseline
@@ -24,8 +24,8 @@ fn test_simple_ts_medium_backward_compatibility() -> Result<()> {
     let baseline = baseline_helpers::load_baseline("simple_ts_medium")?;
 
     // Generate current output with default configuration
-    let scip_path = PathBuf::from("../../examples/simple-ts/index.scip");
-    let project_root = PathBuf::from("../../examples/simple-ts");
+    let scip_path = PathBuf::from("../../../examples/simple-ts/index.scip");
+    let project_root = PathBuf::from("../../../examples/simple-ts");
 
     let config = YcgConfig {
         lod: LevelOfDetail::Medium,
@@ -38,6 +38,7 @@ fn test_simple_ts_medium_backward_compatibility() -> Result<()> {
             exclude_patterns: vec![],
             use_gitignore: false,
         },
+        adhoc_granularity: AdHocGranularity::default(), // Default: Level 0
     };
 
     let current_output = run_scip_conversion(&scip_path, config)?;
@@ -86,6 +87,11 @@ fn test_all_baselines_backward_compatibility() -> Result<()> {
     let mut failures = Vec::new();
 
     for test_case in &test_cases {
+        // Skip adhoc baselines - they're tested separately in granularity_backward_compatibility_test
+        if test_case.contains("adhoc") {
+            continue;
+        }
+
         println!("  Testing: {}", test_case);
 
         // Parse test case name to extract example and LOD
@@ -101,8 +107,8 @@ fn test_all_baselines_backward_compatibility() -> Result<()> {
         };
 
         // Generate current output
-        let scip_path = PathBuf::from(format!("../../examples/{}/index.scip", example_dir));
-        let project_root = PathBuf::from(format!("../../examples/{}", example_dir));
+        let scip_path = PathBuf::from(format!("../../../examples/{}/index.scip", example_dir));
+        let project_root = PathBuf::from(format!("../../../examples/{}", example_dir));
 
         if !scip_path.exists() {
             println!("    ⚠ Skipping: SCIP file not found");
@@ -120,6 +126,7 @@ fn test_all_baselines_backward_compatibility() -> Result<()> {
                 exclude_patterns: vec![],
                 use_gitignore: false,
             },
+            adhoc_granularity: AdHocGranularity::default(),
         };
 
         let current_output = match run_scip_conversion(&scip_path, config) {

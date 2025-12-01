@@ -1,6 +1,6 @@
 [package]
 name = "ycg_core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 # Dependências que o código usa em tempo de execução
@@ -36,6 +36,9 @@ ignore = "0.4"      # Gitignore file parsing
 regex = "1.0"       # Pattern matching for framework detection
 lazy_static = "1.4" # Lazy static initialization for regex patterns
 
+# Parallel Processing
+rayon = "1.10" # Data parallelism for signature/logic extraction
+
 
 # Dependências usadas APENAS durante a compilação
 [build-dependencies]
@@ -44,3 +47,10 @@ prost-build = "0.12" # Compila o .proto para Rust
 # Dependências para testes
 [dev-dependencies]
 tempfile = "3.0" # Temporary files for tests
+criterion = { version = "0.5", features = [
+    "html_reports",
+] } # Benchmarking framework
+
+[[bench]]
+name = "granularity_benchmarks"
+harness = false

@@ -28,14 +28,28 @@ This will:
 The baseline generator creates outputs for:
 
 ### Simple TypeScript Project (`examples/simple-ts`)
+
+**YAML Format:**
 - `simple_ts_low.yaml` - Low level of detail
 - `simple_ts_medium.yaml` - Medium level of detail
 - `simple_ts_high.yaml` - High level of detail
 
+**Ad-Hoc Format (Granularity Levels):**
+- `simple_ts_high_adhoc_default.yaml` - Level 0: Default format (ID|Name|Type)
+- `simple_ts_high_adhoc_signatures.yaml` - Level 1: Inline signatures (ID|Signature|Type)
+- `simple_ts_high_adhoc_logic.yaml` - Level 2: Inline logic (ID|Signature|Type|logic:steps) - **Gold Standard**
+
 ### NestJS API Project (`examples/nestjs-api-ts`)
+
+**YAML Format:**
 - `nestjs_low.yaml` - Low level of detail
 - `nestjs_medium.yaml` - Medium level of detail
 - `nestjs_high.yaml` - High level of detail
+
+**Ad-Hoc Format (Granularity Levels):**
+- `nestjs_high_adhoc_default.yaml` - Level 0: Default format (ID|Name|Type)
+- `nestjs_high_adhoc_signatures.yaml` - Level 1: Inline signatures (ID|Signature|Type)
+- `nestjs_high_adhoc_logic.yaml` - Level 2: Inline logic (ID|Signature|Type|logic:steps) - **Gold Standard**
 
 ## Usage in Tests
 

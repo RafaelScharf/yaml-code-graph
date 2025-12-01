@@ -1,0 +1,268 @@
+_meta:
+  name: ycg-v1.3
+  version: 1.3.0
+_defs:
+- def_8c88|user.dto.ts|file
+- UserDto_698e|UserDto|class
+- UserDto_userId_1fb9|UserDto#userId|variable
+- UserDto_username_f01a|UserDto#username|variable
+- InternalUser_b45d|InternalUser|class
+- InternalUser_userId_54d6|InternalUser#userId|variable
+- InternalUser_username_3092|InternalUser#username|variable
+- InternalUser_password_7cfd|InternalUser#password|variable
+- def_1b21|users.service.ts|file
+- mockUsers_ab8f|mockUsers|variable
+- UsersService_4844|UsersService|class
+- UsersService_findOne_7fed|UsersService#findOne|method
+- UsersService_findOne____username__1dc5|UsersService#findOne().(username)|variable
+- local_2_91ef|local 2|variable
+- local_5_44cf|local 5|variable
+- UsersService_findById_7f1f|UsersService#findById|method
+- UsersService_findById____id__3b6b|UsersService#findById().(id)|variable
+- local_8_3e0e|local 8|variable
+- local_11_6d84|local 11|variable
+- def_b539|auth.service.ts|file
+- AuthService_3a0d|AuthService|class
+- AuthService__constructor__1abe|AuthService#<constructor>|method
+- AuthService__constructor_____usersService__1c63|AuthService#<constructor>().(usersService)|variable
+- AuthService_validateUser_dd39|AuthService#validateUser|method
+- AuthService_validateUser____username__87f5|AuthService#validateUser().(username)|variable
+- AuthService_validateUser____pass__2ee5|AuthService#validateUser().(pass)|variable
+- local_2_91ef|local 2|variable
+- local_7_8d5c|local 7|variable
+- local_8_3e0e|local 8|variable
+- local_11_6d84|local 11|variable
+- def_924a|auth.controller.ts|file
+- AuthController_6ba5|AuthController|class
+- AuthController__constructor__4bec|AuthController#<constructor>|method
+- AuthController__constructor_____authService__c31d|AuthController#<constructor>().(authService)|variable
+- AuthController_login_8ec4|AuthController#login|method
+- AuthController_login____loginDto__fa03|AuthController#login().(loginDto)|variable
+- AuthController_login____loginDto_typeLiteral0_username_bbfa|AuthController#login().(loginDto)typeLiteral0:username|variable
+- AuthController_login____loginDto_typeLiteral0_password_6a46|AuthController#login().(loginDto)typeLiteral0:password|variable
+- local_3_9c5e|local 3|variable
+- access_token0__c899|access_token0:|variable
+- user0__f10b|user0:|variable
+- message0__2f87|message0:|variable
+- def_a4a3|users.controller.ts|file
+- UsersController_4702|UsersController|class
+- UsersController__constructor__cb29|UsersController#<constructor>|method
+- UsersController__constructor_____usersService__f634|UsersController#<constructor>().(usersService)|variable
+- UsersController_findOne_13b7|UsersController#findOne|method
+- UsersController_findOne____id__1ac8|UsersController#findOne().(id)|variable
+- local_2_91ef|local 2|variable
+- userId0__95a5|userId0:|variable
+- username0__e666|username0:|variable
+- def_2201|users.module.ts|file
+- UsersModule_6e98|UsersModule|class
+- def_9b39|auth.module.ts|file
+- AuthModule_5ded|AuthModule|class
+- def_c667|app.module.ts|file
+- AppModule_f66b|AppModule|class
+- def_1280|main.ts|file
+- bootstrap_357f|bootstrap|method
+- local_2_91ef|local 2|variable
+- def_49b1|auth.guard.ts|file
+- AuthGuard_159a|AuthGuard|class
+- AuthGuard_canActivate_c9aa|AuthGuard#canActivate|method
+- AuthGuard_canActivate____context__7dca|AuthGuard#canActivate().(context)|variable
+- local_3_9c5e|local 3|variable
+- local_6_35a8|local 6|variable
+graph:
+  AuthController_6ba5:
+    calls:
+    - AuthController__constructor_____authService__c31d
+    - AuthController_login____loginDto__fa03
+    - AuthController_login____loginDto_typeLiteral0_password_6a46
+    - AuthController_login____loginDto_typeLiteral0_username_bbfa
+    - AuthService_validateUser_dd39
+    - local_3_9c5e
+  AuthController__constructor__4bec:
+    calls:
+    - AuthService_3a0d
+    - ext_2384
+  AuthController_login_8ec4:
+    calls:
+    - ext_b139
+  AuthGuard_159a:
+    calls:
+    - ext_efc0
+    - local_3_9c5e
+    - local_6_35a8
+  AuthGuard_canActivate_c9aa:
+    calls:
+    - AuthGuard_canActivate____context__7dca
+    - ext_1532
+    - ext_2b4e
+    - ext_5134
+    - ext_54e4
+    - ext_5ed7
+    - ext_6abf
+    - ext_72d3
+    - ext_9f28
+    - ext_ce6f
+  AuthService_3a0d:
+    calls:
+    - AuthService_validateUser____pass__2ee5
+    - InternalUser_password_7cfd
+    - local_2_91ef
+    - local_8_3e0e
+  AuthService__constructor__1abe:
+    calls:
+    - UsersService_4844
+  AuthService_validateUser_dd39:
+    calls:
+    - AuthService__constructor_____usersService__1c63
+    - AuthService_validateUser____username__87f5
+    - UsersService_findOne_7fed
+    - ext_1532
+    - ext_2b4e
+    - ext_54e4
+    - ext_72d3
+    - ext_9f28
+  UsersController_4702:
+    calls:
+    - InternalUser_userId_54d6
+    - InternalUser_username_3092
+    - ext_1371
+    - ext_610e
+    - local_2_91ef
+  UsersController__constructor__cb29:
+    calls:
+    - UsersService_4844
+    - ext_8b48
+  UsersController_findOne_13b7:
+    calls:
+    - UserDto_698e
+    - UsersController__constructor_____usersService__f634
+    - UsersController_findOne____id__1ac8
+    - UsersService_findById_7f1f
+    - ext_1532
+    - ext_2b4e
+    - ext_54e4
+    - ext_6189
+    - ext_72d3
+    - ext_7b82
+    - ext_9f28
+  UsersService_4844:
+    calls:
+    - InternalUser_b45d
+    - InternalUser_username_3092
+    - UsersService_findOne____username__1dc5
+    - ext_1371
+    - ext_1532
+    - ext_2b4e
+    - ext_5294
+    - ext_54e4
+    - ext_610e
+    - ext_72d3
+    - ext_9f28
+    - local_2_91ef
+    - local_5_44cf
+    - mockUsers_ab8f
+  bootstrap_357f:
+    calls:
+    - AppModule_f66b
+    - ext_8240
+    - ext_96c9
+    - ext_b9c5
+    - ext_c9a9
+    - ext_f537
+    - local_2_91ef
+  file_31df:
+    calls:
+    - UsersController_4702
+    - UsersService_4844
+    - def_1b21
+    - def_a4a3
+    - ext_2395
+    - ext_2be9
+    - ext_8660
+    - ext_9af5
+    - ext_e61f
+  file_4acf:
+    calls:
+    - AuthService_3a0d
+    - def_b539
+    - ext_2384
+    - ext_5fed
+    - ext_9af5
+    - ext_b139
+  file_650f:
+    calls:
+    - AuthController_6ba5
+    - AuthService_3a0d
+    - UsersModule_6e98
+    - def_2201
+    - def_924a
+    - def_b539
+    - ext_2395
+    - ext_49ca
+    - ext_8660
+    - ext_9af5
+    - ext_e61f
+  file_7453:
+    calls:
+    - InternalUser_b45d
+    - InternalUser_password_7cfd
+    - InternalUser_userId_54d6
+    - InternalUser_username_3092
+    - UsersService_findById____id__3b6b
+    - def_8c88
+    - ext_1371
+    - ext_1532
+    - ext_2b4e
+    - ext_5294
+    - ext_54e4
+    - ext_610e
+    - ext_72d3
+    - ext_7cce
+    - ext_9af5
+    - ext_9f28
+    - local_11_6d84
+    - local_8_3e0e
+    - mockUsers_ab8f
+  file_85bd:
+    calls:
+    - AppModule_f66b
+    - def_c667
+    - ext_93d8
+    - ext_9af5
+    - ext_9b00
+    - ext_f537
+  file_945c:
+    calls:
+    - UsersService_4844
+    - def_1b21
+    - ext_7cce
+    - ext_9af5
+  file_ae19:
+    calls:
+    - AuthModule_5ded
+    - UsersModule_6e98
+    - def_2201
+    - def_9b39
+    - ext_2395
+    - ext_49ca
+    - ext_8660
+    - ext_9af5
+    - ext_e61f
+  file_cd73:
+    calls:
+    - UserDto_698e
+    - UsersService_4844
+    - def_1b21
+    - def_8c88
+    - ext_5fed
+    - ext_6189
+    - ext_7b82
+    - ext_8b48
+    - ext_9af5
+  file_f9d3:
+    calls:
+    - ext_5134
+    - ext_5ed7
+    - ext_7cce
+    - ext_9af5
+    - ext_c5a5
+    - ext_efc0

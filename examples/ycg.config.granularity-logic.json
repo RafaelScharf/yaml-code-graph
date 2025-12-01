@@ -1,0 +1,19 @@
+{
+    "$schema": "../schema/ycg.config.schema.json",
+    "output": {
+        "format": "adhoc",
+        "compact": false,
+        "ignoreFrameworkNoise": false,
+        "adhocGranularity": "logic"
+    },
+    "ignore": {
+        "useGitignore": true,
+        "customPatterns": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.git/**"
+        ]
+    },
+    "include": []
+}
