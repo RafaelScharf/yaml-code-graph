@@ -8,7 +8,11 @@
 
 **YCG** (YAML Code Graph) is a high-performance Rust tool that transforms source code into semantic knowledge graphs optimized for Large Language Models. By combining SCIP (Stack Graph Code Indexing Protocol) for global symbol resolution with Tree-sitter for local enrichment, YCG generates "Pseudo-RDF" YAML representations that maximize semantic density while minimizing token consumption.
 
-## 🚀 Why YCG?
+## 🚀 Quick Start
+
+New to YCG? Check out the [Quick Start Guide](QUICKSTART.md) for a 5-minute tutorial!
+
+## Why YCG?
 
 Traditional code context (raw files) is inefficient and noisy for LLMs. YCG addresses this by:
 
