@@ -15,6 +15,8 @@ struct BaselineTestCase {
     scip_path: PathBuf,
     project_root: PathBuf,
     lod: LevelOfDetail,
+    granularity: Option<AdHocGranularity>,
+    output_format: OutputFormat,
 }
 
 impl BaselineTestCase {
@@ -27,6 +29,27 @@ impl BaselineTestCase {
             scip_path,
             project_root,
             lod,
+            granularity: None,
+            output_format: OutputFormat::Yaml,
+        }
+    }
+
+    fn new_adhoc(
+        name: &'static str,
+        example_dir: &str,
+        lod: LevelOfDetail,
+        granularity: AdHocGranularity,
+    ) -> Self {
+        let project_root = PathBuf::from("../../examples").join(example_dir);
+        let scip_path = project_root.join("index.scip");
+
+        Self {
+            name,
+            scip_path,
+            project_root,
+            lod,
+            granularity: Some(granularity),
+            output_format: OutputFormat::AdHoc,
         }
     }
 }
@@ -42,8 +65,8 @@ pub fn generate_all_baselines() -> Result<()> {
     fs::create_dir_all(&baseline_dir)?;
     println!("✓ Created baseline directory: {:?}", baseline_dir);
 
-    // Define test cases
-    let test_cases = vec![
+    // Define test cases - YAML format (existing baselines)
+    let mut test_cases = vec![
         BaselineTestCase::new("simple_ts_low", "simple-ts", LevelOfDetail::Low),
         BaselineTestCase::new("simple_ts_medium", "simple-ts", LevelOfDetail::Medium),
         BaselineTestCase::new("simple_ts_high", "simple-ts", LevelOfDetail::High),
@@ -51,6 +74,53 @@ pub fn generate_all_baselines() -> Result<()> {
         BaselineTestCase::new("nestjs_medium", "nestjs-api-ts", LevelOfDetail::Medium),
         BaselineTestCase::new("nestjs_high", "nestjs-api-ts", LevelOfDetail::High),
     ];
+
+    // Add Ad-Hoc format test cases with granularity levels
+    // Requirements: 8.1, 8.2, 8.3 - Backward compatibility baselines
+    test_cases.extend(vec![
+        // Simple TypeScript - Level 0 (Default) - should match v1.3.1
+        BaselineTestCase::new_adhoc(
+            "simple_ts_high_adhoc_default",
+            "simple-ts",
+            LevelOfDetail::High,
+            AdHocGranularity::Default,
+        ),
+        // Simple TypeScript - Level 1 (Inline Signatures)
+        BaselineTestCase::new_adhoc(
+            "simple_ts_high_adhoc_signatures",
+            "simple-ts",
+            LevelOfDetail::High,
+            AdHocGranularity::InlineSignatures,
+        ),
+        // Simple TypeScript - Level 2 (Inline Logic) - Gold Standard
+        BaselineTestCase::new_adhoc(
+            "simple_ts_high_adhoc_logic",
+            "simple-ts",
+            LevelOfDetail::High,
+            AdHocGranularity::InlineLogic,
+        ),
+        // NestJS - Level 0 (Default) - should match v1.3.1
+        BaselineTestCase::new_adhoc(
+            "nestjs_high_adhoc_default",
+            "nestjs-api-ts",
+            LevelOfDetail::High,
+            AdHocGranularity::Default,
+        ),
+        // NestJS - Level 1 (Inline Signatures)
+        BaselineTestCase::new_adhoc(
+            "nestjs_high_adhoc_signatures",
+            "nestjs-api-ts",
+            LevelOfDetail::High,
+            AdHocGranularity::InlineSignatures,
+        ),
+        // NestJS - Level 2 (Inline Logic) - Gold Standard
+        BaselineTestCase::new_adhoc(
+            "nestjs_high_adhoc_logic",
+            "nestjs-api-ts",
+            LevelOfDetail::High,
+            AdHocGranularity::InlineLogic,
+        ),
+    ]);
 
     // Generate baseline for each test case
     for test_case in test_cases {
@@ -80,20 +150,19 @@ fn generate_baseline(test_case: &BaselineTestCase, baseline_dir: &Path) -> Resul
         return Ok(());
     }
 
-    // Create default configuration (no optimizations)
-    // This represents the "previous version" behavior
+    // Create configuration based on test case
     let config = YcgConfig {
         lod: test_case.lod,
         project_root: test_case.project_root.clone(),
-        compact: false,                    // Default: no compaction
-        output_format: OutputFormat::Yaml, // Default: YAML format
-        ignore_framework_noise: false,     // Default: no framework filtering
+        compact: false, // Default: no compaction
+        output_format: test_case.output_format,
+        ignore_framework_noise: false, // Default: no framework filtering
         file_filter: FileFilterConfig {
             include_patterns: vec![],
             exclude_patterns: vec![],
             use_gitignore: false, // Default: don't use gitignore for baseline
         },
-        adhoc_granularity: AdHocGranularity::default(), // Default: Level 0
+        adhoc_granularity: test_case.granularity.unwrap_or_default(),
     };
 
     // Generate output
@@ -136,12 +205,22 @@ mod tests {
         }
 
         let expected_files = vec![
+            // YAML format baselines
             "simple_ts_low.yaml",
             "simple_ts_medium.yaml",
             "simple_ts_high.yaml",
             "nestjs_low.yaml",
             "nestjs_medium.yaml",
             "nestjs_high.yaml",
+            // Ad-Hoc format baselines - Level 0 (Default)
+            "simple_ts_high_adhoc_default.yaml",
+            "nestjs_high_adhoc_default.yaml",
+            // Ad-Hoc format baselines - Level 1 (Signatures)
+            "simple_ts_high_adhoc_signatures.yaml",
+            "nestjs_high_adhoc_signatures.yaml",
+            // Ad-Hoc format baselines - Level 2 (Logic) - Gold Standard
+            "simple_ts_high_adhoc_logic.yaml",
+            "nestjs_high_adhoc_logic.yaml",
         ];
 
         for file in expected_files {
