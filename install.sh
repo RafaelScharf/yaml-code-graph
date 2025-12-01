@@ -2,7 +2,7 @@
 set -e
 
 # YCG CLI Installation Script
-# This script installs the ycg_cli binary to your system
+# This script builds and installs the ycg_cli binary to your system
 
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="ycg"
@@ -10,10 +10,20 @@ SOURCE_BINARY="./target/release/ycg_cli"
 
 echo "🚀 Installing YCG CLI..."
 
-# Check if binary exists
+# Check if cargo is available
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Error: cargo not found"
+    echo "Please install Rust from https://rustup.rs/"
+    exit 1
+fi
+
+# Build the latest version
+echo "🔨 Building latest version with cargo..."
+cargo build --release --bin ycg_cli
+
+# Verify binary was created
 if [ ! -f "$SOURCE_BINARY" ]; then
-    echo "❌ Error: Binary not found at $SOURCE_BINARY"
-    echo "Please run 'cargo build --release' first"
+    echo "❌ Error: Build failed - binary not found at $SOURCE_BINARY"
     exit 1
 fi
 

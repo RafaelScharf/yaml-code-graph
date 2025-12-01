@@ -1180,7 +1180,7 @@ checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "ycg_cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "ycg_core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "criterion",
