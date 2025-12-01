@@ -6,7 +6,7 @@
 //! - Ad-Hoc format has correct structure (3 pipe-separated fields)
 //! - Graph edges maintain referential integrity (all IDs exist)
 
-use crate::model::{YcgGraph, YcgGraphAdHoc, YcgGraphOptimized};
+use crate::model::{AdHocGranularity, YcgGraph, YcgGraphAdHoc, YcgGraphOptimized};
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashSet;
 
@@ -48,15 +48,186 @@ impl YamlValidator {
     }
 }
 
+/// Validate ad-hoc format output based on granularity level
+///
+/// This function validates that ad-hoc definitions conform to the expected
+/// structure for the specified granularity level:
+/// - Level 0 (Default): 3 fields (ID|Name|Type)
+/// - Level 1 (InlineSignatures): 3 fields (ID|Signature|Type)
+/// - Level 2 (InlineLogic): 3 or 4 fields (ID|Signature|Type|logic:steps)
+///
+/// Additionally validates:
+/// - Logic field format (must start with "logic:")
+/// - Logic keywords are valid (check, action, return, match, get)
+///
+/// # Arguments
+/// * `graph` - The YcgGraphAdHoc to validate
+/// * `granularity` - The granularity level to validate against
+///
+/// # Returns
+/// * `Ok(())` if valid
+/// * `Err` with descriptive message if invalid
+///
+/// **Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.6**
+pub fn validate_adhoc_granularity(
+    graph: &YcgGraphAdHoc,
+    granularity: AdHocGranularity,
+) -> Result<()> {
+    for (idx, def) in graph.definitions.iter().enumerate() {
+        let field_count = count_unescaped_pipes(def) + 1;
+
+        // Validate field count based on granularity level
+        match granularity {
+            AdHocGranularity::Default | AdHocGranularity::InlineSignatures => {
+                // Level 0 and Level 1: exactly 3 fields
+                if field_count != 3 {
+                    return Err(anyhow!(
+                        "Invalid ad-hoc format at definition {} for granularity level '{}': \
+                         expected 3 fields, got {}. Definition: '{}'",
+                        idx,
+                        granularity.to_str(),
+                        field_count,
+                        def
+                    ));
+                }
+            }
+            AdHocGranularity::InlineLogic => {
+                // Level 2: 3 or 4 fields (logic field is optional)
+                if field_count != 3 && field_count != 4 {
+                    return Err(anyhow!(
+                        "Invalid ad-hoc format at definition {} for granularity level 'logic': \
+                         expected 3 or 4 fields, got {}. Definition: '{}'",
+                        idx,
+                        field_count,
+                        def
+                    ));
+                }
+
+                // If 4 fields, validate the logic field
+                if field_count == 4 {
+                    let parts: Vec<&str> = split_unescaped_pipes(def);
+                    let logic_field = parts[3];
+
+                    // Validate logic field starts with "logic:"
+                    if !logic_field.starts_with("logic:") {
+                        return Err(anyhow!(
+                            "Invalid logic field at definition {}: \
+                             logic field must start with 'logic:', got '{}'. Definition: '{}'",
+                            idx,
+                            logic_field,
+                            def
+                        ));
+                    }
+
+                    // Extract logic content after "logic:" prefix
+                    let logic_content = &logic_field[6..]; // Skip "logic:"
+
+                    // Validate logic keywords
+                    validate_logic_keywords(logic_content, idx, def)?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that logic content uses only valid keywords
+///
+/// Valid keywords: check, action, return, match, get
+/// Logic steps are separated by semicolons
+///
+/// # Arguments
+/// * `logic_content` - The logic content after "logic:" prefix
+/// * `idx` - Definition index for error reporting
+/// * `def` - Full definition string for error reporting
+///
+/// # Returns
+/// * `Ok(())` if all keywords are valid
+/// * `Err` with details about invalid keywords
+fn validate_logic_keywords(logic_content: &str, idx: usize, def: &str) -> Result<()> {
+    const VALID_LOGIC_KEYWORDS: &[&str] = &["check", "action", "return", "match", "get"];
+
+    // Split by semicolons to get individual logic steps
+    let steps: Vec<&str> = logic_content.split(';').map(|s| s.trim()).collect();
+
+    for step in steps {
+        if step.is_empty() {
+            continue;
+        }
+
+        // Extract keyword (everything before the opening parenthesis)
+        let keyword = if let Some(paren_pos) = step.find('(') {
+            &step[..paren_pos]
+        } else {
+            // No parenthesis found - this might be a truncated logic (ending with "...")
+            // or malformed logic
+            if step.ends_with("...") {
+                // Truncated logic is acceptable
+                continue;
+            }
+            step
+        };
+
+        // Check if keyword is valid
+        if !VALID_LOGIC_KEYWORDS.contains(&keyword) {
+            return Err(anyhow!(
+                "Invalid logic keyword at definition {}: \
+                 found '{}', valid keywords are: {}. Definition: '{}'",
+                idx,
+                keyword,
+                VALID_LOGIC_KEYWORDS.join(", "),
+                def
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Split a string by unescaped pipes
+///
+/// Returns a vector of string slices, properly handling escaped pipes.
+fn split_unescaped_pipes(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut current_start = 0;
+    let mut i = 0;
+    let chars: Vec<char> = s.chars().collect();
+
+    while i < chars.len() {
+        if chars[i] == '\\' && i + 1 < chars.len() && chars[i + 1] == '|' {
+            // Skip escaped pipe
+            i += 2;
+        } else if chars[i] == '|' {
+            // Found unescaped pipe - extract substring
+            parts.push(&s[current_start..i]);
+            current_start = i + 1;
+            i += 1;
+        } else {
+            i += 1;
+        }
+    }
+
+    // Add the last part
+    if current_start < s.len() {
+        parts.push(&s[current_start..]);
+    }
+
+    parts
+}
+
 /// Validator for Ad-Hoc format output
 pub struct AdHocValidator;
 
 impl AdHocValidator {
-    /// Validate that Ad-Hoc format output has correct structure
+    /// Validate that Ad-Hoc format output has correct structure (Level 0 - Default)
     ///
     /// Checks that:
     /// - Each definition has exactly 3 pipe-separated fields (id|name|type)
     /// - All graph edge references point to valid symbol IDs
+    ///
+    /// This method validates Level 0 (Default) format. For granularity-aware
+    /// validation, use `validate_with_granularity()`.
     ///
     /// # Arguments
     /// * `graph` - The YcgGraphAdHoc to validate
@@ -67,7 +238,7 @@ impl AdHocValidator {
     ///
     /// **Validates: Requirements 8.2, 8.3**
     pub fn validate(graph: &YcgGraphAdHoc) -> Result<()> {
-        // Validate field count for each definition
+        // Validate field count for each definition (Level 0: exactly 3 fields)
         for (idx, def) in graph.definitions.iter().enumerate() {
             let field_count = count_unescaped_pipes(def) + 1;
             if field_count != 3 {
@@ -79,6 +250,38 @@ impl AdHocValidator {
                 ));
             }
         }
+
+        // Validate referential integrity
+        validate_graph_integrity_adhoc(graph)
+            .context("Ad-hoc format referential integrity check failed")?;
+
+        Ok(())
+    }
+
+    /// Validate Ad-Hoc format output with granularity level awareness
+    ///
+    /// Performs comprehensive validation including:
+    /// - Field count validation based on granularity level
+    /// - Logic field format validation (for Level 2)
+    /// - Logic keyword validation (for Level 2)
+    /// - Graph referential integrity
+    ///
+    /// # Arguments
+    /// * `graph` - The YcgGraphAdHoc to validate
+    /// * `granularity` - The granularity level to validate against
+    ///
+    /// # Returns
+    /// * `Ok(())` if valid
+    /// * `Err` with descriptive message if invalid
+    ///
+    /// **Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.6**
+    pub fn validate_with_granularity(
+        graph: &YcgGraphAdHoc,
+        granularity: AdHocGranularity,
+    ) -> Result<()> {
+        // Validate granularity-specific structure
+        validate_adhoc_granularity(graph, granularity)
+            .context("Ad-hoc granularity validation failed")?;
 
         // Validate referential integrity
         validate_graph_integrity_adhoc(graph)
@@ -332,7 +535,9 @@ fn count_unescaped_pipes(s: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{EdgeType, ProjectMetadata, ReferenceEdge, ScipSymbolKind, SymbolNode};
+    use crate::model::{
+        AdHocGranularity, EdgeType, ProjectMetadata, ReferenceEdge, ScipSymbolKind, SymbolNode,
+    };
     use std::collections::BTreeMap;
 
     #[test]
@@ -682,5 +887,327 @@ mod tests {
                 .to_string()
                 .contains("referential integrity")
         );
+    }
+
+    // --- GRANULARITY VALIDATION TESTS ---
+
+    #[test]
+    fn test_validate_adhoc_granularity_level0_valid() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB|method".to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::Default);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_adhoc_granularity_level0_invalid_field_count() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB|method|extra_field".to_string(), // 4 fields - invalid for Level 0
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::Default);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("expected 3 fields"));
+        assert!(err_msg.contains("got 4"));
+    }
+
+    #[test]
+    fn test_validate_adhoc_granularity_level1_valid() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB(param:str):bool|method".to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineSignatures);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_adhoc_granularity_level1_invalid_field_count() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB(param:str):bool".to_string(), // Only 2 fields - invalid
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineSignatures);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("expected 3 fields"));
+        assert!(err_msg.contains("got 2"));
+    }
+
+    #[test]
+    fn test_validate_adhoc_granularity_level2_valid_with_logic() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB(param:str):bool|method|logic:check(param);return(true)".to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_adhoc_granularity_level2_valid_without_logic() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB(param:str):bool|method".to_string(), // 3 fields - valid (logic optional)
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_adhoc_granularity_level2_invalid_field_count() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB(param:str):bool|method|logic:check(param)|extra".to_string(), // 5 fields - invalid
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("expected 3 or 4 fields"));
+        assert!(err_msg.contains("got 5"));
+    }
+
+    #[test]
+    fn test_validate_logic_field_format_missing_prefix() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "B_0002|methodB(param:str):bool|method|check(param);return(true)".to_string(), // Missing "logic:" prefix
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("logic field must start with 'logic:'"));
+    }
+
+    #[test]
+    fn test_validate_logic_keywords_valid() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "B_0002|methodB|method|logic:check(x>0);action(save);get(data);match(x)?a:b;return(result)".to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_logic_keywords_invalid() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "B_0002|methodB|method|logic:check(x>0);invalid_keyword(data);return(result)"
+                    .to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Invalid logic keyword"));
+        assert!(err_msg.contains("invalid_keyword"));
+        assert!(err_msg.contains("check, action, return, match, get"));
+    }
+
+    #[test]
+    fn test_validate_logic_keywords_truncated() {
+        // Truncated logic (ending with "...") should be accepted
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "B_0002|methodB|method|logic:check(x>0);action(save);get(data);match(x)?a:b;return(res...".to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_with_granularity_level0() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB|method".to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = AdHocValidator::validate_with_granularity(&graph, AdHocGranularity::Default);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_with_granularity_level1() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB(x:num):str|method".to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result =
+            AdHocValidator::validate_with_granularity(&graph, AdHocGranularity::InlineSignatures);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_with_granularity_level2() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "A_0001|ClassA|class".to_string(),
+                "B_0002|methodB(x:num):str|method|logic:check(x>0);return(x.toString())"
+                    .to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result =
+            AdHocValidator::validate_with_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_split_unescaped_pipes() {
+        let parts = split_unescaped_pipes("a|b|c");
+        assert_eq!(parts, vec!["a", "b", "c"]);
+
+        let parts = split_unescaped_pipes(r"a\|b|c");
+        assert_eq!(parts, vec![r"a\|b", "c"]);
+
+        let parts = split_unescaped_pipes(r"a\|b\|c");
+        assert_eq!(parts, vec![r"a\|b\|c"]);
+
+        let parts = split_unescaped_pipes("id|name(x:str):bool|method|logic:check(x)");
+        assert_eq!(
+            parts,
+            vec!["id", "name(x:str):bool", "method", "logic:check(x)"]
+        );
+    }
+
+    #[test]
+    fn test_validate_logic_keywords_with_complex_conditions() {
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                "B_0002|methodB|method|logic:check(x>0 && y<10);action(save);return(result)"
+                    .to_string(),
+            ],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_logic_keywords_empty_steps() {
+        // Empty steps (e.g., from trailing semicolons) should be handled gracefully
+        let graph = YcgGraphAdHoc {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec!["B_0002|methodB|method|logic:check(x>0);;return(result)".to_string()],
+            adjacency: BTreeMap::new(),
+        };
+
+        let result = validate_adhoc_granularity(&graph, AdHocGranularity::InlineLogic);
+        assert!(result.is_ok());
     }
 }
