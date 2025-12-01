@@ -2,6 +2,7 @@
 pub mod adhoc_format;
 pub mod config;
 pub mod enricher;
+pub mod errors;
 pub mod file_filter;
 pub mod framework_filter;
 pub mod model;
