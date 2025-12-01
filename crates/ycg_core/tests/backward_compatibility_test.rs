@@ -87,6 +87,11 @@ fn test_all_baselines_backward_compatibility() -> Result<()> {
     let mut failures = Vec::new();
 
     for test_case in &test_cases {
+        // Skip adhoc baselines - they're tested separately in granularity_backward_compatibility_test
+        if test_case.contains("adhoc") {
+            continue;
+        }
+
         println!("  Testing: {}", test_case);
 
         // Parse test case name to extract example and LOD
