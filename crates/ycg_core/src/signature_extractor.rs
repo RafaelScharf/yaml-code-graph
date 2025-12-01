@@ -506,4 +506,106 @@ mod tests {
 
         assert_eq!(result, "delete(id:str)");
     }
+
+    #[test]
+    fn test_constructor_with_dependency_injection() {
+        // Requirement 2.6: Constructors with dependency injection
+        let sig = "constructor(userService: UserService, configService: ConfigService)";
+        let result = SignatureExtractor::compact_signature(sig, "constructor");
+
+        assert_eq!(
+            result,
+            "constructor(userService:UserService,configService:ConfigService)"
+        );
+    }
+
+    #[test]
+    fn test_constructor_no_params() {
+        // Test constructor with no parameters
+        let sig = "constructor()";
+        let result = SignatureExtractor::compact_signature(sig, "constructor");
+
+        assert_eq!(result, "constructor()");
+    }
+
+    #[test]
+    fn test_method_with_array_params() {
+        // Requirement 2.5: Handle array types in parameters
+        let sig = "processUsers(users: User[], options: string[]): boolean";
+        let result = SignatureExtractor::compact_signature(sig, "processUsers");
+
+        assert_eq!(result, "processUsers(users:User[],options:str[]):bool");
+    }
+
+    #[test]
+    fn test_method_with_nested_generics() {
+        // Test nested generic types
+        let sig = "transform(data: Promise<Result<User>>): Promise<Response<User>>";
+        let result = SignatureExtractor::compact_signature(sig, "transform");
+
+        assert_eq!(
+            result,
+            "transform(data:Promise<Result<User>>):Promise<Response<User>>"
+        );
+    }
+
+    #[test]
+    fn test_method_with_complex_optional() {
+        // Test complex optional parameters
+        let sig = "findUser(id: string, options?: { limit: number, offset: number }): User | null";
+        let result = SignatureExtractor::compact_signature(sig, "findUser");
+
+        // Should handle complex optional type
+        assert!(result.contains("findUser"));
+        assert!(result.contains("id:str"));
+        assert!(result.contains("User?"));
+    }
+
+    #[test]
+    fn test_fallback_on_malformed_signature() {
+        // Requirement 2.7: Fallback to simple name on parse failure
+        let sig = "this is not a valid signature";
+        let result = SignatureExtractor::compact_signature(sig, "methodName");
+
+        assert_eq!(result, "methodName");
+    }
+
+    #[test]
+    fn test_method_with_rest_parameters() {
+        // Test rest/spread parameters
+        let sig = "combine(first: string, ...rest: string[]): string";
+        let result = SignatureExtractor::compact_signature(sig, "combine");
+
+        assert!(result.contains("combine"));
+        assert!(result.contains("first:str"));
+        assert!(result.contains("str"));
+    }
+
+    #[test]
+    fn test_method_with_union_types() {
+        // Test union types in parameters
+        let sig = "process(value: string | number): boolean";
+        let result = SignatureExtractor::compact_signature(sig, "process");
+
+        assert!(result.contains("process"));
+        assert!(result.contains("bool"));
+    }
+
+    #[test]
+    fn test_simple_method_no_types() {
+        // Test method with no type annotations (edge case)
+        let sig = "simpleMethod()";
+        let result = SignatureExtractor::compact_signature(sig, "simpleMethod");
+
+        assert_eq!(result, "simpleMethod()");
+    }
+
+    #[test]
+    fn test_method_with_multiple_optional_params() {
+        // Test multiple optional parameters
+        let sig = "search(query: string, limit?: number, offset?: number): User[]";
+        let result = SignatureExtractor::compact_signature(sig, "search");
+
+        assert_eq!(result, "search(query:str,limit:num?,offset:num?):User[]");
+    }
 }
