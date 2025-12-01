@@ -1,0 +1,28 @@
+_meta:
+  name: ycg-v1.3
+  version: 1.3.0
+_defs:
+- def_68a6|main.ts|file
+- hello_2f76|hello|method
+- hello____name__9ff6|hello().(name)|variable
+- User_486c|User|class
+- User_id_7591|User#id|variable
+- User__constructor__823a|User#<constructor>|method
+- User__constructor_____id__774b|User#<constructor>().(id)|variable
+- main_c0df|main|method
+- local_2_91ef|local 2|variable
+graph:
+  file_2611:
+    calls:
+    - User__constructor__823a
+    - User__constructor_____id__774b
+    - User_id_7591
+    - ext_3566
+    - ext_830f
+    - hello_2f76
+  hello_2f76:
+    calls:
+    - ext_1371
+    - ext_610e
+    - ext_b5ec
+    - hello____name__9ff6
