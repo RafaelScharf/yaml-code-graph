@@ -31,7 +31,12 @@ pub enum LevelOfDetail {
 pub struct YcgConfig {
     pub lod: LevelOfDetail,
     pub project_root: PathBuf,
-    pub compact: bool, // NOVO: Flag para ativar lista de adjacência
+    pub compact: bool, // Flag para ativar lista de adjacência
+
+    // New fields for token optimization
+    pub output_format: model::OutputFormat,
+    pub ignore_framework_noise: bool,
+    pub file_filter: model::FileFilterConfig,
 }
 
 struct Scope {

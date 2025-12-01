@@ -226,6 +226,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gitignore"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d051488d9a601181a9b90c9ad8ae7e8251d642ddd2463008f2f5019d255bd89"
+dependencies = [
+ "glob",
+]
+
+[[package]]
+name = "glob"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -736,9 +751,12 @@ name = "ycg_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "gitignore",
+ "glob",
  "prost",
  "prost-build",
  "prost-types",
+ "regex",
  "serde",
  "serde_yaml",
  "thiserror",

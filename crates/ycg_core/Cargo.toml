@@ -29,6 +29,11 @@ xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 tiktoken-rs = "0.5"
 
+# Token Optimization Dependencies
+glob = "0.3"      # Glob pattern matching
+gitignore = "1.0" # Gitignore file parsing
+regex = "1.0"     # Pattern matching for framework detection
+
 
 # Dependências usadas APENAS durante a compilação
 [build-dependencies]

@@ -85,3 +85,70 @@ pub enum ScipSymbolKind {
     Variable,
     Interface,
 }
+
+// --- CONFIGURATION MODELS FOR TOKEN OPTIMIZATION ---
+
+/// Configuration file format for YCG
+#[derive(Debug, Deserialize, Clone)]
+pub struct YcgConfigFile {
+    #[serde(default)]
+    pub output: OutputConfig,
+    #[serde(default)]
+    pub ignore: IgnoreConfig,
+    #[serde(default)]
+    pub include: Vec<String>,
+}
+
+/// Output configuration settings
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct OutputConfig {
+    pub format: Option<String>,
+    pub compact: Option<bool>,
+    #[serde(rename = "ignoreFrameworkNoise")]
+    pub ignore_framework_noise: Option<bool>,
+}
+
+/// Ignore patterns configuration
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct IgnoreConfig {
+    #[serde(rename = "useGitignore")]
+    pub use_gitignore: Option<bool>,
+    #[serde(rename = "customPatterns")]
+    pub custom_patterns: Option<Vec<String>>,
+}
+
+/// Output format options
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OutputFormat {
+    Yaml,
+    AdHoc,
+}
+
+impl Default for OutputFormat {
+    fn default() -> Self {
+        OutputFormat::Yaml
+    }
+}
+
+/// File filtering configuration
+#[derive(Debug, Clone, Default)]
+pub struct FileFilterConfig {
+    pub include_patterns: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+    pub use_gitignore: bool,
+}
+
+// --- AD-HOC FORMAT MODEL ---
+
+/// Ad-hoc format representation using pipe-separated strings
+#[derive(Debug, Serialize)]
+pub struct YcgGraphAdHoc {
+    #[serde(rename = "_meta")]
+    pub metadata: ProjectMetadata,
+
+    #[serde(rename = "_defs")]
+    pub definitions: Vec<String>, // Pipe-separated strings: "id|name|type"
+
+    #[serde(rename = "graph")]
+    pub adjacency: BTreeMap<String, BTreeMap<EdgeType, Vec<String>>>,
+}
