@@ -1,0 +1,68 @@
+# ----------------------------------------------------------------------------
+# RUST (Padrão)
+# ----------------------------------------------------------------------------
+/target/
+**/*.rs.bk
+# Se usar Mac/Linux, é bom ignorar backups de editores comuns
+**/*~
+**/*.swp
+
+# ----------------------------------------------------------------------------
+# SCIP & YCG ARTIFACTS
+# ----------------------------------------------------------------------------
+# Índices binários grandes do SCIP
+*.scip
+
+# Grafos gerados pelo YCG
+# Em vez de ignorar todos *.yaml, ignoramos padrões de saída comuns
+# Isso protege seus arquivos de CI/CD (.github/workflows)
+output_final.yaml
+*_graph.yaml
+*_graph_v2.yaml
+*_graph_dedup.yaml
+# Se o CLI permite definir output, idealmente jogue numa pasta (ex: /output/)
+/output/
+
+# ----------------------------------------------------------------------------
+# NODE.JS & EXAMPLES
+# ----------------------------------------------------------------------------
+node_modules/
+dist/
+build/
+coverage/
+# Se o CLI permite definir output, idealmente jogue numa pasta (ex: /output/)
+/output/
+
+# ----------------------------------------------------------------------------
+
+# Logs de debug do NPM
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ----------------------------------------------------------------------------
+# IDEs & OS
+# ----------------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ----------------------------------------------------------------------------
+# AI & CONTEXT TOOLS (Repomix/Kiro)
+# ----------------------------------------------------------------------------
+# Ignora o mapa de contexto (XML grande)
+context_map.xml
+
+# Ignora o script empacotado, mas MANTÉM o config
+repomix-pack-codebase.sh
+# Ignora diretórios temporários de ferramentas de AI
+.kiro/
+
+# ----------------------------------------------------------------------------
+# TEST OUTPUTS
+# ----------------------------------------------------------------------------
+# Específico para os caminhos dos seus testes atuais
+examples/simple-ts/*.yaml
+examples/nestjs-api-ts/*.yaml
+flycheck*

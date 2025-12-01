@@ -1,13 +1,50 @@
-name: CI
+name: Rust CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_and_test:
+    name: Build & Test
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Essencial: Instala o compilador de Protobuf necessário para o prost-build
+      # (Seu build.rs depende disso para processar scip.proto)
+      - name: Install Protoc
+        run: sudo apt-get install -y protobuf-compiler
+
+      # Instala o Rust Stable com componentes extras (clippy, rustfmt)
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # Cache inteligente para acelerar o build (evita baixar deps do crates.io toda vez)
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # 1. Verifica se o código está bem formatado
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+
+      # 2. Verifica lints (boas práticas) e falha se houver warnings
+      - name: Lint with Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      # 3. Compila o projeto (Workspace completo)
+      - name: Build Workspace
+        run: cargo build --workspace --verbose
+
+      # 4. Roda os testes unitários
+      - name: Run Tests
+        run: cargo test --workspace --verbose

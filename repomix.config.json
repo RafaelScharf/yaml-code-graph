@@ -1,0 +1,44 @@
+{
+  "output": {
+    "style": "xml",
+    "filePath": "context_map.xml",
+    "parsableStyle": false,
+    "compress": false,
+    "headerText": "YCG - YAML Code Graph",
+    "fileSummary": true,
+    "removeComments": true,
+    "removeEmptyLines": false,
+    "topCharsLimit": 10000000,
+    "topFilesLength": 5,
+    "showLineNumbers": true,
+    "includeEmptyDirectories": false,
+    "directoryStructure": true,
+    "files": true,
+    "truncateBase64": true,
+    "tokenCountTree": 50000,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 100,
+      "includeDiffs": true,
+      "includeLogs": true,
+      "includeLogsCount": 50
+    }
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/examples/**",
+      "**/.vscode/**",
+      "**/.kiro/**",
+      ".git/**",
+      "context_map.xml"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "include": [
+    "**/*"
+  ]
+}
