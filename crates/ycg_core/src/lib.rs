@@ -1,4 +1,5 @@
 // crates/ycg_core/src/lib.rs
+pub mod adhoc_format;
 pub mod config;
 pub mod enricher;
 pub mod file_filter;

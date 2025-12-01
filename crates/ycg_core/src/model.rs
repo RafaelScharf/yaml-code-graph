@@ -27,7 +27,7 @@ pub struct YcgGraphOptimized {
     pub adjacency: BTreeMap<String, BTreeMap<EdgeType, Vec<String>>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct ProjectMetadata {
     pub name: String,
     pub version: String,
