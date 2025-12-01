@@ -46,6 +46,26 @@ enum Commands {
         /// Ativa modo compacto (Lista de Adjacência)
         #[arg(short, long, default_value_t = false)]
         compact: bool,
+
+        /// Remove framework boilerplate patterns (DI constructors, decorators)
+        #[arg(long)]
+        ignore_framework_noise: bool,
+
+        /// Output format: yaml (default) or adhoc (compact pipe-separated format)
+        #[arg(long, value_name = "FORMAT")]
+        output_format: Option<String>,
+
+        /// Include only files matching this glob pattern (can be repeated)
+        #[arg(long, value_name = "PATTERN")]
+        include: Vec<String>,
+
+        /// Exclude files matching this glob pattern (can be repeated)
+        #[arg(long, value_name = "PATTERN")]
+        exclude: Vec<String>,
+
+        /// Disable automatic gitignore processing
+        #[arg(long)]
+        no_gitignore: bool,
     },
 }
 
@@ -60,7 +80,23 @@ fn main() -> Result<()> {
             root,
             lod,
             compact,
-        } => handle_generate_command(input, output, root, lod, compact),
+            ignore_framework_noise,
+            output_format,
+            include,
+            exclude,
+            no_gitignore,
+        } => handle_generate_command(
+            input,
+            output,
+            root,
+            lod,
+            compact,
+            ignore_framework_noise,
+            output_format,
+            include,
+            exclude,
+            no_gitignore,
+        ),
     }
 }
 
@@ -197,7 +233,14 @@ fn handle_generate_command(
     root: Option<PathBuf>,
     lod: u8,
     compact: bool,
+    ignore_framework_noise: bool,
+    output_format: Option<String>,
+    include: Vec<String>,
+    exclude: Vec<String>,
+    no_gitignore: bool,
 ) -> Result<()> {
+    use ycg_core::config::ConfigLoader;
+
     let lod = match lod {
         0 => LevelOfDetail::Low,
         1 => LevelOfDetail::Medium,
@@ -213,10 +256,38 @@ fn handle_generate_command(
             .to_path_buf(),
     };
 
+    // Try to load config file from project root
+    let config_path = project_root.join("ycg.config.json");
+    let file_config = ConfigLoader::load_from_file(&config_path)?;
+
+    // Merge file config with CLI arguments (CLI takes precedence)
+    let cli_compact = if compact { Some(true) } else { None };
+    let cli_ignore_framework_noise = if ignore_framework_noise {
+        Some(true)
+    } else {
+        None
+    };
+
+    let merged = ConfigLoader::merge_with_cli(
+        file_config,
+        cli_compact,
+        output_format,
+        cli_ignore_framework_noise,
+        include,
+        exclude,
+        no_gitignore,
+    )?;
+
+    // Validate the merged configuration
+    ConfigLoader::validate(&merged)?;
+
     let config = YcgConfig {
         lod,
         project_root: project_root.clone(),
-        compact,
+        compact: merged.compact,
+        output_format: merged.output_format,
+        ignore_framework_noise: merged.ignore_framework_noise,
+        file_filter: merged.file_filter,
     };
 
     println!("--- YCG: Processando {:?} ---", input);

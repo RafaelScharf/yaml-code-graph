@@ -1,4 +1,5 @@
 // crates/ycg_core/src/lib.rs
+pub mod config;
 pub mod enricher;
 pub mod model;
 
