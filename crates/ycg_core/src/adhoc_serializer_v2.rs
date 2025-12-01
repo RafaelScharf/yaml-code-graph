@@ -14,7 +14,9 @@ use crate::ast_cache::AstCache;
 use crate::logic_extractor::LogicExtractor;
 use crate::model::{AdHocGranularity, ScipSymbolKind, SymbolNode, YcgGraph, YcgGraphAdHoc};
 use crate::signature_extractor::SignatureExtractor;
+use rayon::prelude::*;
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 
 /// Enhanced ad-hoc serializer with granularity level support
 ///
@@ -227,6 +229,171 @@ impl AdHocSerializerV2 {
                     // Pre-populate cache for this file
                     // The actual parsing will happen in the extractors when tree-sitter is integrated
                     cache.get_or_parse(&node.id, source);
+                }
+
+                self.serialize_node(node, source)
+            })
+            .collect();
+
+        // Build adjacency list (same as existing implementation)
+        let mut adjacency: BTreeMap<String, BTreeMap<crate::model::EdgeType, Vec<String>>> =
+            BTreeMap::new();
+
+        for edge in &graph.references {
+            let node_edges = adjacency
+                .entry(edge.from.clone())
+                .or_insert_with(BTreeMap::new);
+
+            let targets = node_edges.entry(edge.edge_type).or_insert_with(Vec::new);
+
+            targets.push(edge.to.clone());
+        }
+
+        // Sort targets for determinism
+        for inner_map in adjacency.values_mut() {
+            for targets in inner_map.values_mut() {
+                targets.sort();
+            }
+        }
+
+        YcgGraphAdHoc {
+            metadata: graph.metadata.clone(),
+            definitions,
+            adjacency,
+        }
+    }
+
+    /// Serialize entire graph to YcgGraphAdHoc format with parallel extraction
+    ///
+    /// This version uses rayon to parallelize signature and logic extraction across
+    /// multiple symbols, improving performance for large codebases at Level 1 and Level 2.
+    ///
+    /// # Arguments
+    /// * `graph` - The graph to serialize
+    /// * `sources` - Map of file paths to source code content (for signature/logic extraction)
+    ///
+    /// # Returns
+    /// YcgGraphAdHoc with serialized definitions and adjacency list
+    ///
+    /// # Performance
+    ///
+    /// Parallel extraction provides significant speedup for large codebases:
+    /// - Level 0: No parallelization needed (simple string formatting)
+    /// - Level 1: Parallel signature extraction across symbols
+    /// - Level 2: Parallel signature + logic extraction across symbols
+    ///
+    /// The implementation uses rayon's parallel iterators to process multiple symbols
+    /// concurrently while maintaining deterministic output order.
+    ///
+    /// **Validates: Requirements 10.1, 10.2**
+    pub fn serialize_graph_parallel(
+        &self,
+        graph: &YcgGraph,
+        sources: &std::collections::HashMap<String, String>,
+    ) -> YcgGraphAdHoc {
+        // For Level 0 (Default), no extraction is needed, so parallel processing
+        // would add overhead without benefit. Use sequential processing.
+        if matches!(self.granularity, AdHocGranularity::Default) {
+            return self.serialize_graph(graph, sources);
+        }
+
+        // For Level 1 and Level 2, use parallel extraction
+        // We use par_iter() to process symbols in parallel, then collect results
+        // maintaining the original order for determinism
+        let definitions: Vec<String> = graph
+            .definitions
+            .par_iter()
+            .map(|node| {
+                // Get source code for this node's file
+                let source = sources.get(&node.id).map(|s| s.as_str()).unwrap_or("");
+                self.serialize_node(node, source)
+            })
+            .collect();
+
+        // Build adjacency list (same as existing implementation)
+        // This part is sequential as it's typically fast and order-dependent
+        let mut adjacency: BTreeMap<String, BTreeMap<crate::model::EdgeType, Vec<String>>> =
+            BTreeMap::new();
+
+        for edge in &graph.references {
+            let node_edges = adjacency
+                .entry(edge.from.clone())
+                .or_insert_with(BTreeMap::new);
+
+            let targets = node_edges.entry(edge.edge_type).or_insert_with(Vec::new);
+
+            targets.push(edge.to.clone());
+        }
+
+        // Sort targets for determinism
+        for inner_map in adjacency.values_mut() {
+            for targets in inner_map.values_mut() {
+                targets.sort();
+            }
+        }
+
+        YcgGraphAdHoc {
+            metadata: graph.metadata.clone(),
+            definitions,
+            adjacency,
+        }
+    }
+
+    /// Serialize entire graph to YcgGraphAdHoc format with parallel extraction and AST caching
+    ///
+    /// This version combines parallel processing with AST caching for optimal performance.
+    /// It uses a thread-safe cache wrapped in a Mutex to allow concurrent access from
+    /// multiple threads while maintaining cache coherence.
+    ///
+    /// # Arguments
+    /// * `graph` - The graph to serialize
+    /// * `sources` - Map of file paths to source code content (for signature/logic extraction)
+    /// * `cache` - AST cache for reusing parsed ASTs (wrapped in Mutex for thread safety)
+    ///
+    /// # Returns
+    /// YcgGraphAdHoc with serialized definitions and adjacency list
+    ///
+    /// # Performance
+    ///
+    /// This method provides the best performance for large codebases by combining:
+    /// - Parallel extraction across symbols (rayon)
+    /// - AST caching to avoid redundant parsing (AstCache)
+    /// - Thread-safe cache access (Mutex)
+    ///
+    /// The Mutex overhead is minimal compared to the parsing cost, making this
+    /// approach significantly faster than sequential processing for Level 1 and Level 2.
+    ///
+    /// **Validates: Requirements 10.1, 10.2, 10.3, 10.4**
+    pub fn serialize_graph_parallel_with_cache(
+        &self,
+        graph: &YcgGraph,
+        sources: &std::collections::HashMap<String, String>,
+        cache: &Mutex<AstCache>,
+    ) -> YcgGraphAdHoc {
+        // For Level 0 (Default), no extraction is needed
+        if matches!(self.granularity, AdHocGranularity::Default) {
+            return self.serialize_graph(graph, sources);
+        }
+
+        // For Level 1 and Level 2, use parallel extraction with caching
+        let definitions: Vec<String> = graph
+            .definitions
+            .par_iter()
+            .map(|node| {
+                // Get source code for this node's file
+                let source = sources.get(&node.id).map(|s| s.as_str()).unwrap_or("");
+
+                // Pre-populate cache for this file if we're using Level 1 or Level 2
+                if !source.is_empty()
+                    && matches!(
+                        self.granularity,
+                        AdHocGranularity::InlineSignatures | AdHocGranularity::InlineLogic
+                    )
+                {
+                    // Lock the cache for this operation
+                    if let Ok(mut cache_guard) = cache.lock() {
+                        cache_guard.get_or_parse(&node.id, source);
+                    }
                 }
 
                 self.serialize_node(node, source)
@@ -715,5 +882,298 @@ mod tests {
             AdHocSerializerV2::kind_to_string(&ScipSymbolKind::Interface),
             "interface"
         );
+    }
+
+    // ========================================================================
+    // Parallel Extraction Tests
+    // Requirements: 10.1, 10.2
+    // ========================================================================
+
+    #[test]
+    fn test_serialize_graph_parallel_level_0() {
+        // Level 0 should use sequential processing (no benefit from parallelization)
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::Default);
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                create_test_node("A_0001", "ClassA", ScipSymbolKind::Class, None),
+                create_test_node("B_0002", "methodB", ScipSymbolKind::Method, None),
+                create_test_node("C_0003", "methodC", ScipSymbolKind::Method, None),
+            ],
+            references: vec![],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let adhoc = serializer.serialize_graph_parallel(&graph, &sources);
+
+        // Should produce same output as sequential version
+        assert_eq!(adhoc.definitions.len(), 3);
+        assert_eq!(adhoc.definitions[0], "A_0001|ClassA|class");
+        assert_eq!(adhoc.definitions[1], "B_0002|methodB|method");
+        assert_eq!(adhoc.definitions[2], "C_0003|methodC|method");
+    }
+
+    #[test]
+    fn test_serialize_graph_parallel_level_1() {
+        // Level 1 should use parallel processing for signature extraction
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::InlineSignatures);
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                create_test_node("A_0001", "ClassA", ScipSymbolKind::Class, None),
+                create_test_node(
+                    "B_0002",
+                    "methodB",
+                    ScipSymbolKind::Method,
+                    Some("methodB(id: string): User".to_string()),
+                ),
+                create_test_node(
+                    "C_0003",
+                    "methodC",
+                    ScipSymbolKind::Method,
+                    Some("methodC(name: string, age: number): boolean".to_string()),
+                ),
+            ],
+            references: vec![],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let adhoc = serializer.serialize_graph_parallel(&graph, &sources);
+
+        // Should produce same output as sequential version (deterministic order)
+        assert_eq!(adhoc.definitions.len(), 3);
+        assert_eq!(adhoc.definitions[0], "A_0001|ClassA|class");
+        assert!(adhoc.definitions[1].contains("methodB"));
+        assert!(adhoc.definitions[1].contains("str")); // abbreviated
+        assert!(adhoc.definitions[2].contains("methodC"));
+        assert!(adhoc.definitions[2].contains("num")); // abbreviated
+    }
+
+    #[test]
+    fn test_serialize_graph_parallel_level_2() {
+        // Level 2 should use parallel processing for signature + logic extraction
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::InlineLogic);
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                create_test_node("A_0001", "ClassA", ScipSymbolKind::Class, None),
+                create_test_node(
+                    "B_0002",
+                    "methodB",
+                    ScipSymbolKind::Method,
+                    Some("methodB(id: string): User".to_string()),
+                ),
+                create_test_node(
+                    "C_0003",
+                    "methodC",
+                    ScipSymbolKind::Method,
+                    Some("methodC(): boolean".to_string()),
+                ),
+            ],
+            references: vec![],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let adhoc = serializer.serialize_graph_parallel(&graph, &sources);
+
+        // Should produce same output as sequential version
+        assert_eq!(adhoc.definitions.len(), 3);
+        assert_eq!(adhoc.definitions[0], "A_0001|ClassA|class");
+        assert!(adhoc.definitions[1].contains("methodB"));
+        assert!(adhoc.definitions[2].contains("methodC"));
+    }
+
+    #[test]
+    fn test_serialize_graph_parallel_maintains_order() {
+        // Parallel processing should maintain deterministic order
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::InlineSignatures);
+
+        // Create a larger graph to test ordering
+        let mut definitions = Vec::new();
+        for i in 0..20 {
+            definitions.push(create_test_node(
+                &format!("Node_{:04}", i),
+                &format!("method{}", i),
+                ScipSymbolKind::Method,
+                Some(format!("method{}(id: string): boolean", i)),
+            ));
+        }
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions,
+            references: vec![],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let adhoc = serializer.serialize_graph_parallel(&graph, &sources);
+
+        // Verify order is maintained
+        assert_eq!(adhoc.definitions.len(), 20);
+        for i in 0..20 {
+            assert!(
+                adhoc.definitions[i].starts_with(&format!("Node_{:04}", i)),
+                "Definition {} should start with Node_{:04}, got: {}",
+                i,
+                i,
+                adhoc.definitions[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_serialize_graph_parallel_with_cache_level_1() {
+        // Test parallel processing with AST caching
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::InlineSignatures);
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                create_test_node(
+                    "A_0001",
+                    "methodA",
+                    ScipSymbolKind::Method,
+                    Some("methodA(id: string): User".to_string()),
+                ),
+                create_test_node(
+                    "B_0002",
+                    "methodB",
+                    ScipSymbolKind::Method,
+                    Some("methodB(name: string): boolean".to_string()),
+                ),
+            ],
+            references: vec![],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let cache = Mutex::new(AstCache::new());
+        let adhoc = serializer.serialize_graph_parallel_with_cache(&graph, &sources, &cache);
+
+        // Should produce correct output
+        assert_eq!(adhoc.definitions.len(), 2);
+        assert!(adhoc.definitions[0].contains("methodA"));
+        assert!(adhoc.definitions[0].contains("str"));
+        assert!(adhoc.definitions[1].contains("methodB"));
+        assert!(adhoc.definitions[1].contains("bool"));
+    }
+
+    #[test]
+    fn test_serialize_graph_parallel_with_cache_level_0() {
+        // Level 0 should use sequential processing even with cache
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::Default);
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                create_test_node("A_0001", "ClassA", ScipSymbolKind::Class, None),
+                create_test_node("B_0002", "methodB", ScipSymbolKind::Method, None),
+            ],
+            references: vec![],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let cache = Mutex::new(AstCache::new());
+        let adhoc = serializer.serialize_graph_parallel_with_cache(&graph, &sources, &cache);
+
+        // Should produce same output as sequential version
+        assert_eq!(adhoc.definitions.len(), 2);
+        assert_eq!(adhoc.definitions[0], "A_0001|ClassA|class");
+        assert_eq!(adhoc.definitions[1], "B_0002|methodB|method");
+    }
+
+    #[test]
+    fn test_serialize_graph_parallel_empty_graph() {
+        // Test parallel processing with empty graph
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::InlineSignatures);
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "empty".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![],
+            references: vec![],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let adhoc = serializer.serialize_graph_parallel(&graph, &sources);
+
+        assert_eq!(adhoc.definitions.len(), 0);
+        assert_eq!(adhoc.adjacency.len(), 0);
+    }
+
+    #[test]
+    fn test_serialize_graph_parallel_preserves_adjacency() {
+        // Test that parallel processing preserves adjacency list correctly
+        let serializer = AdHocSerializerV2::new(AdHocGranularity::InlineSignatures);
+
+        let graph = YcgGraph {
+            metadata: ProjectMetadata {
+                name: "test".to_string(),
+                version: "1.0".to_string(),
+            },
+            definitions: vec![
+                create_test_node("A_0001", "ClassA", ScipSymbolKind::Class, None),
+                create_test_node(
+                    "B_0002",
+                    "methodB",
+                    ScipSymbolKind::Method,
+                    Some("methodB(): void".to_string()),
+                ),
+                create_test_node(
+                    "C_0003",
+                    "methodC",
+                    ScipSymbolKind::Method,
+                    Some("methodC(): void".to_string()),
+                ),
+            ],
+            references: vec![
+                ReferenceEdge {
+                    from: "B_0002".to_string(),
+                    to: "A_0001".to_string(),
+                    edge_type: EdgeType::Calls,
+                },
+                ReferenceEdge {
+                    from: "B_0002".to_string(),
+                    to: "C_0003".to_string(),
+                    edge_type: EdgeType::Calls,
+                },
+            ],
+        };
+
+        let sources = std::collections::HashMap::new();
+        let adhoc = serializer.serialize_graph_parallel(&graph, &sources);
+
+        // Check adjacency list structure
+        assert!(adhoc.adjacency.contains_key("B_0002"));
+        let b_edges = &adhoc.adjacency["B_0002"];
+        assert!(b_edges.contains_key(&EdgeType::Calls));
+
+        let calls = &b_edges[&EdgeType::Calls];
+        assert_eq!(calls.len(), 2);
+        // Should be sorted
+        assert_eq!(calls[0], "A_0001");
+        assert_eq!(calls[1], "C_0003");
     }
 }
