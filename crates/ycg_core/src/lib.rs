@@ -106,6 +106,16 @@ pub fn run_scip_conversion(scip_path: &Path, config: YcgConfig) -> Result<String
     println!("--- Métrica de Densidade ---");
     println!("Input Total Tokens (Código Bruto): {}", total_input_tokens);
 
+    // Build source code map for signature/logic extraction (before consuming index)
+    let mut sources = HashMap::new();
+    for doc in &index.documents {
+        let real_path = project_root.join(&doc.relative_path);
+        if let Ok(content) = fs::read_to_string(&real_path) {
+            // Map file path to source content
+            sources.insert(doc.relative_path.clone(), content);
+        }
+    }
+
     // Gera o grafo padrão (Flat)
     let mut graph = convert_scip_to_ycg(index, &config);
 
@@ -152,10 +162,18 @@ pub fn run_scip_conversion(scip_path: &Path, config: YcgConfig) -> Result<String
     let output = match config.output_format {
         model::OutputFormat::AdHoc => {
             println!(">>> Serializando em formato Ad-Hoc...");
-            // Convert to ad-hoc format
-            // Note: Ad-hoc format always uses the graph as-is (not optimized)
-            // because it already uses adjacency list internally
-            let adhoc_graph = adhoc_format::AdHocSerializer::serialize_graph(&graph);
+
+            // Log granularity level (Requirements 1.1-1.6)
+            let granularity_str = match config.adhoc_granularity {
+                model::AdHocGranularity::Default => "Level 0 (Default)",
+                model::AdHocGranularity::InlineSignatures => "Level 1 (Inline Signatures)",
+                model::AdHocGranularity::InlineLogic => "Level 2 (Inline Logic)",
+            };
+            println!("    Granularity: {}", granularity_str);
+
+            // Use AdHocSerializerV2 with granularity support
+            let serializer = adhoc_serializer_v2::AdHocSerializerV2::new(config.adhoc_granularity);
+            let adhoc_graph = serializer.serialize_graph(&graph, &sources);
             serde_yaml::to_string(&adhoc_graph)?
         }
         model::OutputFormat::Yaml => {
