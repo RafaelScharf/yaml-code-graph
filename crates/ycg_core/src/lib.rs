@@ -5,6 +5,7 @@ pub mod enricher;
 pub mod errors;
 pub mod file_filter;
 pub mod framework_filter;
+pub mod logic_extractor;
 pub mod model;
 pub mod semantic_filter;
 pub mod signature_extractor;
