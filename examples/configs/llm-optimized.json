@@ -1,0 +1,31 @@
+{
+    "output": {
+        "format": "adhoc",
+        "compact": true,
+        "ignoreFrameworkNoise": true,
+        "adhocGranularity": "logic"
+    },
+    "ignore": {
+        "useGitignore": true,
+        "customPatterns": [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/target/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/*.test.ts",
+            "**/*.test.js",
+            "**/*.spec.ts",
+            "**/*.spec.js",
+            "**/__tests__/**",
+            "**/__mocks__/**"
+        ]
+    },
+    "include": [
+        "**/*.rs",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.jsx"
+    ]
+}

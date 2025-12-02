@@ -1,22 +1,25 @@
-.PHONY: build install uninstall test clean help check fmt example all dev run-example bench
+.PHONY: build install uninstall test clean help check fmt example all dev run-example bench test-configs clean-configs compare-configs
 
 # Default target
 help:
 	@echo "YCG - YAML Code Graph Makefile"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make build       - Build release binary"
-	@echo "  make install     - Install ycg globally (requires sudo)"
-	@echo "  make uninstall   - Remove ycg from system"
-	@echo "  make test        - Run all tests"
-	@echo "  make clean       - Clean build artifacts"
-	@echo "  make check       - Run clippy and format checks"
-	@echo "  make fmt         - Format code with rustfmt"
-	@echo "  make example     - Run example on simple-ts (requires install)"
-	@echo "  make run-example - Run example without installing"
-	@echo "  make bench       - Run benchmarks"
-	@echo "  make all         - Build and install"
-	@echo "  make dev         - Run full development workflow"
+	@echo "  make build         - Build release binary"
+	@echo "  make install       - Install ycg globally (requires sudo)"
+	@echo "  make uninstall     - Remove ycg from system"
+	@echo "  make test          - Run all tests"
+	@echo "  make clean         - Clean build artifacts"
+	@echo "  make check         - Run clippy and format checks"
+	@echo "  make fmt           - Format code with rustfmt"
+	@echo "  make example       - Run example on simple-ts (requires install)"
+	@echo "  make run-example   - Run example without installing"
+	@echo "  make bench         - Run benchmarks"
+	@echo "  make test-configs    - Test all config files on example projects"
+	@echo "  make compare-configs - Compare config test outputs"
+	@echo "  make clean-configs   - Clean config test outputs"
+	@echo "  make all             - Build and install"
+	@echo "  make dev           - Run full development workflow"
 	@echo ""
 
 # Build release binary
@@ -95,3 +98,21 @@ dev: fmt check test build
 # Quick development cycle (no tests)
 quick: fmt build
 	@echo "✅ Quick build complete!"
+
+# Test all configuration files
+test-configs: build
+	@echo "🧪 Testing all configuration files..."
+	@./examples/configs/test-configs.sh
+	@echo "✅ Configuration tests complete!"
+	@echo "📊 View results: cat examples/configs/outputs/metrics.csv"
+
+# Compare configuration outputs
+compare-configs:
+	@echo "📊 Comparing configuration outputs..."
+	@./examples/configs/compare-outputs.sh
+
+# Clean configuration test outputs
+clean-configs:
+	@echo "🧹 Cleaning configuration test outputs..."
+	@rm -rf examples/configs/outputs
+	@echo "✅ Configuration outputs cleaned"

@@ -1,10 +1,9 @@
 {
-    "$schema": "../schema/ycg.config.schema.json",
     "output": {
         "format": "adhoc",
         "compact": false,
         "ignoreFrameworkNoise": false,
-        "adhocGranularity": "logic"
+        "adhocGranularity": "signatures"
     },
     "ignore": {
         "useGitignore": true,

@@ -1,6 +1,6 @@
 {
     "output": {
-        "format": "adhoc",
+        "format": "yaml",
         "compact": true,
         "ignoreFrameworkNoise": true
     },
@@ -12,13 +12,17 @@
             "**/target/**",
             "**/dist/**",
             "**/build/**",
-            "**/*.test.ts",
-            "**/*.spec.ts"
+            "**/*.test.*",
+            "**/*.spec.*",
+            "**/__tests__/**",
+            "**/__mocks__/**",
+            "**/migrations/**",
+            "**/seeds/**"
         ]
     },
     "include": [
-        "**/*.rs",
-        "**/*.ts",
-        "**/*.js"
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.rs"
     ]
 }

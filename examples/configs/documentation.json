@@ -1,0 +1,27 @@
+{
+    "output": {
+        "format": "adhoc",
+        "compact": false,
+        "ignoreFrameworkNoise": true,
+        "adhocGranularity": "signatures"
+    },
+    "ignore": {
+        "useGitignore": true,
+        "customPatterns": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.git/**",
+            "**/*.test.*",
+            "**/*.spec.*",
+            "**/__tests__/**"
+        ]
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.js",
+        "src/**/*.jsx",
+        "src/**/*.rs"
+    ]
+}
