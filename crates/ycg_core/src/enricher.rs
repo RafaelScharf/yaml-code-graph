@@ -38,10 +38,32 @@ impl TreeSitterEnricher {
 
         // 1. Assinatura
         let raw_text = &source_code[target_node.start_byte()..target_node.end_byte()];
-        let signature = if let Some(idx) = raw_text.find('{') {
-            Some(raw_text[..idx].trim().to_string())
+        let signature = if let Some(idx) = find_body_start(raw_text) {
+            let sig = raw_text[..idx].trim().to_string();
+            // Validate signature is not truncated
+            if is_truncated(&sig) {
+                eprintln!(
+                    "Warning: Truncated signature at {}:{} - falling back to symbol name",
+                    file_path.display(),
+                    start_line
+                );
+                None
+            } else {
+                Some(sig)
+            }
         } else {
-            Some(raw_text.trim().to_string())
+            let sig = raw_text.trim().to_string();
+            // Validate signature is not truncated
+            if is_truncated(&sig) {
+                eprintln!(
+                    "Warning: Truncated signature at {}:{} - falling back to symbol name",
+                    file_path.display(),
+                    start_line
+                );
+                None
+            } else {
+                Some(sig)
+            }
         };
 
         // 2. Documentação
@@ -161,4 +183,33 @@ fn extract_guard_clauses(node: Node, source: &str, lang: Language) -> Vec<String
     }
 
     preconditions
+}
+/// Finds the start of the function body by matching brackets.
+/// Returns the index of the first unmatched opening brace '{'.
+/// Handles nested parentheses and angle brackets to avoid false positives.
+fn find_body_start(text: &str) -> Option<usize> {
+    let mut paren_depth = 0;
+    let mut angle_depth = 0;
+
+    for (i, ch) in text.char_indices() {
+        match ch {
+            '(' => paren_depth += 1,
+            ')' => paren_depth -= 1,
+            '<' => angle_depth += 1,
+            '>' => angle_depth -= 1,
+            '{' if paren_depth == 0 && angle_depth == 0 => return Some(i),
+            _ => {}
+        }
+    }
+
+    None
+}
+
+/// Detects if a signature is truncated or incomplete.
+/// Checks for unmatched brackets and incomplete patterns.
+fn is_truncated(signature: &str) -> bool {
+    signature.ends_with('(')
+        || signature.ends_with('<')
+        || signature.matches('(').count() != signature.matches(')').count()
+        || signature.matches('<').count() != signature.matches('>').count()
 }
