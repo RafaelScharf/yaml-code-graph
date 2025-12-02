@@ -133,18 +133,141 @@ impl FrameworkNoiseFilter {
     /// - @IsOptional()
     /// - @Column({ type: 'varchar' })
     /// - Any @Decorator(...) pattern
+    ///
+    /// Handles multi-line decorators with nested parentheses by processing
+    /// line-by-line and tracking decorator state across lines.
     pub fn strip_decorators(signature: &str) -> String {
-        lazy_static::lazy_static! {
-            // Pattern to match decorators: @DecoratorName(...) or @DecoratorName
-            static ref DECORATOR_PATTERN: Regex = Regex::new(
-                r"@\w+(\([^)]*\))?\s*"
-            ).unwrap();
+        let lines: Vec<&str> = signature.lines().collect();
+        let mut result_lines = Vec::new();
+        let mut in_decorator = false;
+        let mut paren_depth = 0;
+
+        for line in lines {
+            let trimmed = line.trim();
+
+            // Check if line starts a decorator
+            if trimmed.starts_with('@') {
+                paren_depth = Self::count_parens(trimmed);
+
+                // Check if decorator completes on same line (balanced parentheses)
+                if paren_depth == 0 {
+                    // Decorator is complete on this line
+                    // Check if there's content after the decorator on the same line
+                    if let Some(remaining) = Self::extract_after_decorator(trimmed) {
+                        if !remaining.is_empty() {
+                            result_lines.push(remaining);
+                            in_decorator = false;
+                        } else {
+                            // Decorator without parentheses, property on next line
+                            in_decorator = false;
+                        }
+                    } else {
+                        // No content after decorator on this line
+                        in_decorator = false;
+                    }
+                } else {
+                    // Decorator spans multiple lines
+                    in_decorator = true;
+                }
+                continue;
+            }
+
+            // Skip lines that are part of multi-line decorator
+            if in_decorator {
+                // Accumulate parenthesis depth
+                paren_depth += Self::count_parens(trimmed);
+                // Check if this line completes the decorator (parentheses balanced)
+                if paren_depth == 0 {
+                    in_decorator = false;
+                }
+                continue;
+            }
+
+            // Keep non-decorator lines
+            result_lines.push(line);
         }
 
-        DECORATOR_PATTERN
-            .replace_all(signature, "")
-            .trim()
-            .to_string()
+        result_lines.join("\n").trim().to_string()
+    }
+
+    /// Extract content after decorator on the same line
+    ///
+    /// For input like "@ApiProperty() name: string", returns "name: string"
+    /// For input like "@IsString() @IsOptional() email: string", returns "email: string"
+    /// For input like "@PrimaryGeneratedColumn", returns None
+    fn extract_after_decorator(line: &str) -> Option<&str> {
+        let chars = line.chars();
+        let mut in_decorator = false;
+        let mut paren_depth = 0;
+        let mut last_decorator_end = 0;
+        let mut pos = 0;
+
+        for ch in chars {
+            pos += ch.len_utf8();
+
+            match ch {
+                '@' => {
+                    in_decorator = true;
+                    paren_depth = 0;
+                }
+                '(' if in_decorator => {
+                    paren_depth += 1;
+                }
+                ')' if in_decorator => {
+                    paren_depth -= 1;
+                    if paren_depth == 0 {
+                        // Decorator with parentheses completed
+                        last_decorator_end = pos;
+                        in_decorator = false;
+                    }
+                }
+                ' ' | '\t' if in_decorator && paren_depth == 0 => {
+                    // Decorator without parentheses followed by whitespace
+                    last_decorator_end = pos;
+                    in_decorator = false;
+                }
+                _ if !in_decorator && !ch.is_whitespace() && ch != '@' => {
+                    // Found non-decorator content
+                    return Some(line[pos - ch.len_utf8()..].trim());
+                }
+                _ => {}
+            }
+        }
+
+        // If we're still in a decorator at the end, there's no content after it
+        if in_decorator {
+            return None;
+        }
+
+        // If we only found decorators, return None
+        if last_decorator_end == 0 || last_decorator_end >= line.len() {
+            None
+        } else {
+            let remaining = line[last_decorator_end..].trim();
+            if remaining.is_empty() {
+                None
+            } else {
+                Some(remaining)
+            }
+        }
+    }
+
+    /// Count unmatched parentheses in a text string
+    ///
+    /// Returns the depth of unmatched opening parentheses:
+    /// - 0 means all parentheses are balanced
+    /// - Positive means more opening than closing parentheses
+    /// - Negative means more closing than opening parentheses
+    fn count_parens(text: &str) -> i32 {
+        let mut depth = 0;
+        for ch in text.chars() {
+            match ch {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                _ => {}
+            }
+        }
+        depth
     }
 
     /// Simplify DTO property definitions by removing decorator metadata
@@ -169,12 +292,12 @@ impl FrameworkNoiseFilter {
         }
 
         // Also strip decorators from documentation if present
-        if let Some(doc) = &node.documentation {
-            if doc.contains('@') {
-                let simplified = Self::strip_decorators(doc);
-                if simplified != *doc {
-                    node.documentation = Some(simplified);
-                }
+        if let Some(doc) = &node.documentation
+            && doc.contains('@')
+        {
+            let simplified = Self::strip_decorators(doc);
+            if simplified != *doc {
+                node.documentation = Some(simplified);
             }
         }
     }
@@ -234,7 +357,7 @@ mod tests {
         let expected = "name: string";
         assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
 
-        // Test multiple decorators
+        // Test multiple decorators on same line
         let input = "@IsString() @IsOptional() email?: string";
         let expected = "email?: string";
         assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
@@ -252,6 +375,58 @@ mod tests {
         // Test no decorators
         let input = "name: string";
         assert_eq!(FrameworkNoiseFilter::strip_decorators(input), input);
+    }
+
+    #[test]
+    fn test_strip_decorators_multi_line() {
+        // Test multi-line decorator with nested parentheses (TypeORM OneToMany)
+        let input = "@OneToMany(\n    () => User,\n    (user) => user.profile\n)\nuser: User";
+        let expected = "user: User";
+        assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
+
+        // Test multi-line decorator with complex nested arguments
+        let input = "@ManyToOne(\n    () => DoctorCrmSpecialty,\n    (doctorCrmSpecialty) => doctorCrmSpecialty.doctorCrm\n)\ndoctorSpecialties: DoctorCrmSpecialty[]";
+        let expected = "doctorSpecialties: DoctorCrmSpecialty[]";
+        assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
+
+        // Test multiple multi-line decorators
+        let input =
+            "@Column({\n    type: 'varchar',\n    length: 255\n})\n@Index()\nusername: string";
+        let expected = "username: string";
+        assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
+
+        // Test decorator without parentheses followed by property
+        let input = "@PrimaryGeneratedColumn\nid: number";
+        let expected = "id: number";
+        assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
+    }
+
+    #[test]
+    fn test_count_parens() {
+        // Balanced parentheses
+        assert_eq!(FrameworkNoiseFilter::count_parens("()"), 0);
+        assert_eq!(FrameworkNoiseFilter::count_parens("(a, b)"), 0);
+        assert_eq!(FrameworkNoiseFilter::count_parens("((a))"), 0);
+
+        // Unbalanced - more opening
+        assert_eq!(FrameworkNoiseFilter::count_parens("("), 1);
+        assert_eq!(FrameworkNoiseFilter::count_parens("(("), 2);
+        assert_eq!(FrameworkNoiseFilter::count_parens("(a, (b"), 2);
+
+        // Unbalanced - more closing
+        assert_eq!(FrameworkNoiseFilter::count_parens(")"), -1);
+        assert_eq!(FrameworkNoiseFilter::count_parens("))"), -2);
+
+        // No parentheses
+        assert_eq!(FrameworkNoiseFilter::count_parens("abc"), 0);
+        assert_eq!(FrameworkNoiseFilter::count_parens(""), 0);
+
+        // Mixed with other characters
+        assert_eq!(
+            FrameworkNoiseFilter::count_parens("@Column({ type: 'varchar' })"),
+            0
+        );
+        assert_eq!(FrameworkNoiseFilter::count_parens("() => User,"), 0);
     }
 
     #[test]
