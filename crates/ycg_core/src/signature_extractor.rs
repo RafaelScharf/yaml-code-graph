@@ -157,6 +157,26 @@ impl SignatureExtractor {
         None
     }
 
+    /// Find matching closing angle bracket for generics
+    ///
+    /// Similar to find_matching_paren but for angle brackets
+    fn find_matching_angle_bracket(s: &str, start: usize) -> Option<usize> {
+        let mut depth = 0;
+        for (i, ch) in s[start..].char_indices() {
+            match ch {
+                '<' => depth += 1,
+                '>' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(start + i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
     /// Parse parameters from parameter string
     ///
     /// Handles:
@@ -293,33 +313,99 @@ impl SignatureExtractor {
     /// - "User | null" → "User?"
     /// - "string | undefined" → "str?"
     /// - "User | null | undefined" → "User?"
+    /// - "Promise<InternalUser | undefined>" → "Promise<InternalUser>?"
     /// - "boolean | Promise<boolean> | Observable<boolean>" → "bool" (takes first type for simplicity)
     ///
     /// **Validates: Requirement 2.4**
     fn normalize_optional_type(type_str: &str) -> String {
         let trimmed = type_str.trim();
 
-        // Check if it's a union with null or undefined
+        // Check if it's a generic type with union inside (e.g., Promise<User | null>)
+        if let Some(generic_start) = trimmed.find('<') {
+            // Find the matching closing bracket
+            if let Some(generic_end) = Self::find_matching_angle_bracket(trimmed, generic_start) {
+                let base_type = &trimmed[..generic_start];
+                let generic_content = &trimmed[generic_start + 1..generic_end];
+                let after_generic = &trimmed[generic_end + 1..];
+
+                // Recursively normalize the generic content
+                let normalized_content = Self::normalize_optional_type(generic_content);
+
+                // Check if the normalized content is optional
+                if normalized_content.ends_with('?') {
+                    // Remove the ? from inside and add it outside
+                    let content_without_optional = normalized_content.trim_end_matches('?');
+                    return format!(
+                        "{}<{}>?{}",
+                        base_type, content_without_optional, after_generic
+                    );
+                } else {
+                    return format!("{}<{}>{}", base_type, normalized_content, after_generic);
+                }
+            }
+        }
+
+        // Check if it's a union with null or undefined at the top level
         if trimmed.contains('|') {
-            // Split by | and filter out null/undefined
-            let parts: Vec<&str> = trimmed
-                .split('|')
-                .map(|s| s.trim())
-                .filter(|s| *s != "null" && *s != "undefined")
+            // Split by | respecting brackets (don't split inside <>, (), [])
+            let parts = Self::split_union_types(trimmed);
+
+            // Filter out null/undefined
+            let filtered: Vec<String> = parts
+                .into_iter()
+                .filter(|s| s != "null" && s != "undefined")
                 .collect();
 
-            if parts.len() == 1 {
+            if filtered.len() == 1 {
                 // Single type with null/undefined → make it optional
-                return format!("{}?", parts[0]);
-            } else if parts.len() > 1 {
+                return format!("{}?", filtered[0]);
+            } else if filtered.len() > 1 {
                 // Multiple types in union (e.g., boolean | Promise<boolean> | Observable<boolean>)
                 // For compactness, take the first type only
                 // This is a simplification for token efficiency
-                return parts[0].to_string();
+                return filtered[0].clone();
             }
         }
 
         trimmed.to_string()
+    }
+
+    /// Split union types by | respecting nested brackets
+    ///
+    /// Handles:
+    /// - "Promise<User | null>" → ["Promise<User | null>"] (doesn't split inside <>)
+    /// - "User | null" → ["User", "null"]
+    /// - "Promise<Result<T>> | undefined" → ["Promise<Result<T>>", "undefined"]
+    fn split_union_types(type_str: &str) -> Vec<String> {
+        let mut parts = Vec::new();
+        let mut current = String::new();
+        let mut depth = 0;
+
+        for ch in type_str.chars() {
+            match ch {
+                '<' | '(' | '[' => {
+                    depth += 1;
+                    current.push(ch);
+                }
+                '>' | ')' | ']' => {
+                    depth -= 1;
+                    current.push(ch);
+                }
+                '|' if depth == 0 => {
+                    if !current.trim().is_empty() {
+                        parts.push(current.trim().to_string());
+                        current.clear();
+                    }
+                }
+                _ => current.push(ch),
+            }
+        }
+
+        if !current.trim().is_empty() {
+            parts.push(current.trim().to_string());
+        }
+
+        parts
     }
 }
 
@@ -472,6 +558,32 @@ mod tests {
         // Multiple types with null - for compactness, take first type only
         let result = SignatureExtractor::normalize_optional_type("User | Admin | null");
         assert_eq!(result, "User");
+    }
+
+    #[test]
+    fn test_normalize_optional_type_nested_generic() {
+        // Should not split inside generics
+        let result =
+            SignatureExtractor::normalize_optional_type("Promise<InternalUser | undefined>");
+        assert_eq!(result, "Promise<InternalUser>?");
+    }
+
+    #[test]
+    fn test_split_union_types_simple() {
+        let result = SignatureExtractor::split_union_types("User | null");
+        assert_eq!(result, vec!["User", "null"]);
+    }
+
+    #[test]
+    fn test_split_union_types_nested_generic() {
+        let result = SignatureExtractor::split_union_types("Promise<InternalUser | undefined>");
+        assert_eq!(result, vec!["Promise<InternalUser | undefined>"]);
+    }
+
+    #[test]
+    fn test_split_union_types_complex() {
+        let result = SignatureExtractor::split_union_types("Promise<Result<T>> | undefined");
+        assert_eq!(result, vec!["Promise<Result<T>>", "undefined"]);
     }
 
     #[test]
