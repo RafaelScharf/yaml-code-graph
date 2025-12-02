@@ -80,16 +80,21 @@ impl SignatureExtractor {
     /// Compact a signature by abbreviating types and removing unnecessary keywords
     ///
     /// Transformations:
+    /// - Remove decorators (framework noise)
     /// - Remove async/export/public keywords
     /// - Abbreviate parameter types
     /// - Abbreviate return type
     /// - Remove whitespace
     /// - Handle optional return types (| null, | undefined)
     ///
-    /// **Validates: Requirements 2.2, 2.3, 2.4, 2.5**
+    /// **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8**
     fn compact_signature(sig: &str, method_name: &str) -> String {
+        // First, remove decorators (framework noise)
+        use crate::framework_filter::FrameworkNoiseFilter;
+        let sig_without_decorators = FrameworkNoiseFilter::strip_decorators(sig);
+
         // Remove leading keywords (async, export, public, etc.)
-        let cleaned = sig
+        let cleaned = sig_without_decorators
             .replace("async ", "")
             .replace("export ", "")
             .replace("public ", "")

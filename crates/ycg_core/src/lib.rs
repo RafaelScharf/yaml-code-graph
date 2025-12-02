@@ -358,7 +358,15 @@ fn convert_with_two_passes(
                                 } else {
                                     None
                                 };
-                                (res.signature, res.documentation, l)
+
+                                // Validate variable signatures to prevent inheriting method signatures
+                                let validated_sig = if kind == ScipSymbolKind::Variable {
+                                    validate_variable_signature(res.signature, &occurrence.symbol)
+                                } else {
+                                    res.signature
+                                };
+
+                                (validated_sig, res.documentation, l)
                             }
                             None => (None, None, None),
                         }
@@ -459,6 +467,104 @@ fn find_enclosing_scope(scopes: &[Scope], line: i32) -> Option<u64> {
         }
     }
     best_scope
+}
+
+/// Validates that a variable signature is not a method signature.
+///
+/// Variables should have simple type signatures like `variableName: Type`,
+/// not method signatures containing function patterns. This function implements
+/// comprehensive validation to prevent variables from inheriting parent method signatures.
+///
+/// # Validation Patterns
+/// Rejects signatures containing:
+/// - `function` keyword (method declarations)
+/// - `=>` arrow function syntax
+/// - `async` keyword (async method pattern)
+/// - `@Decorator(...)` patterns (method parameter decorators)
+/// - Return type annotations after closing paren `) :`
+/// - Empty parentheses `()` (method calls or declarations)
+///
+/// # Arguments
+/// * `sig` - The signature to validate
+/// * `symbol_uri` - The SCIP symbol URI for logging purposes
+///
+/// # Returns
+/// * `None` if the signature contains method-like patterns (rejected)
+/// * The original signature if it's valid for a variable
+///
+/// # Examples
+/// ```
+/// // ✅ Valid variable signatures (accepted):
+/// // "userId: number"
+/// // "username: string"
+/// // "user: User"
+///
+/// // ❌ Invalid variable signatures (rejected):
+/// // "findOne(@Param('id', ParseIntPipe) id:num):Promise<UserDto>"
+/// // "async function getData(): Promise<Data>"
+/// // "catch(exception: unknown, host: ArgumentsHost)"
+/// ```
+fn validate_variable_signature(sig: Option<String>, symbol_uri: &str) -> Option<String> {
+    if let Some(ref s) = sig {
+        // Pattern 1: Contains function keyword
+        if s.contains("function") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains 'function'",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 2: Contains arrow function syntax
+        if s.contains("=>") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains '=>'",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 3: Starts with async (method pattern)
+        if s.trim().starts_with("async ") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: starts with 'async'",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 4: Contains parameter list with decorators (e.g., @Param('id', ParseIntPipe))
+        if s.contains('@') && s.contains('(') {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains decorator pattern",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 5: Contains return type annotation with colon after closing paren
+        // Example: "findOne(id: number): Promise<UserDto>"
+        if let Some(paren_pos) = s.rfind(')') {
+            let after_paren = &s[paren_pos + 1..].trim();
+            if after_paren.starts_with(':') {
+                eprintln!(
+                    "⚠️  Rejecting method signature for variable {}: contains return type annotation",
+                    symbol_uri
+                );
+                return None;
+            }
+        }
+
+        // Pattern 6: Contains empty parentheses (method call or declaration)
+        if s.contains("()") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains '()'",
+                symbol_uri
+            );
+            return None;
+        }
+    }
+    sig
 }
 fn extract_parent_id(symbol: &str) -> Option<u64> {
     let mut chars: Vec<char> = symbol.chars().collect();

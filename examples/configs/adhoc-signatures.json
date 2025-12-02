@@ -2,7 +2,7 @@
     "output": {
         "format": "adhoc",
         "compact": false,
-        "ignoreFrameworkNoise": false,
+        "ignoreFrameworkNoise": true,
         "adhocGranularity": "signatures"
     },
     "ignore": {
