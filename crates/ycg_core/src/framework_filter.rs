@@ -137,7 +137,11 @@ impl FrameworkNoiseFilter {
     /// Handles multi-line decorators with nested parentheses by processing
     /// line-by-line and tracking decorator state across lines.
     pub fn strip_decorators(signature: &str) -> String {
-        let lines: Vec<&str> = signature.lines().collect();
+        // First handle inline parameter decorators like @Param('id', ParseIntPipe)
+        let sig_without_inline = Self::strip_inline_decorators(signature);
+
+        // Then handle multi-line decorators
+        let lines: Vec<&str> = sig_without_inline.lines().collect();
         let mut result_lines = Vec::new();
         let mut in_decorator = false;
         let mut paren_depth = 0;
@@ -188,6 +192,70 @@ impl FrameworkNoiseFilter {
         }
 
         result_lines.join("\n").trim().to_string()
+    }
+
+    /// Strip inline parameter decorators from method signatures
+    ///
+    /// Removes decorators that appear inline with parameters, such as:
+    /// - @Param('id', ParseIntPipe) id: number -> id: number
+    /// - @Body() createUserDto: CreateUserDto -> createUserDto: CreateUserDto
+    /// - @Query('page') page: number -> page: number
+    ///
+    /// This handles both decorators with arguments and without:
+    /// - @DecoratorName(...) paramName -> paramName
+    /// - @DecoratorName paramName -> paramName
+    ///
+    /// Properly handles nested parentheses in decorator arguments:
+    /// - @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number -> page: number
+    fn strip_inline_decorators(signature: &str) -> String {
+        let mut result = String::new();
+        let chars: Vec<char> = signature.chars().collect();
+        let mut i = 0;
+
+        while i < chars.len() {
+            // Check if we're at the start of a decorator
+            if chars[i] == '@' {
+                // Find the end of the decorator name
+                let mut j = i + 1;
+                while j < chars.len() && (chars[j].is_alphanumeric() || chars[j] == '_') {
+                    j += 1;
+                }
+
+                // Check if decorator has arguments (parentheses)
+                if j < chars.len() && chars[j] == '(' {
+                    // Skip the decorator with arguments by matching parentheses
+                    let mut paren_depth = 1;
+                    j += 1;
+                    while j < chars.len() && paren_depth > 0 {
+                        if chars[j] == '(' {
+                            paren_depth += 1;
+                        } else if chars[j] == ')' {
+                            paren_depth -= 1;
+                        }
+                        j += 1;
+                    }
+
+                    // Skip trailing whitespace after decorator
+                    while j < chars.len() && chars[j].is_whitespace() {
+                        j += 1;
+                    }
+
+                    i = j;
+                } else {
+                    // Decorator without arguments - skip decorator name and trailing whitespace
+                    while j < chars.len() && chars[j].is_whitespace() {
+                        j += 1;
+                    }
+                    i = j;
+                }
+            } else {
+                // Not a decorator, keep the character
+                result.push(chars[i]);
+                i += 1;
+            }
+        }
+
+        result
     }
 
     /// Extract content after decorator on the same line
@@ -620,5 +688,71 @@ mod tests {
         // Should preserve constructor with complex logic
         assert_eq!(graph.definitions.len(), 3);
         assert!(graph.definitions.iter().any(|n| n.id == "ctor_complex"));
+    }
+
+    #[test]
+    fn test_strip_inline_decorators() {
+        // Test decorator with arguments followed by parameter
+        let input = "@Param('id', ParseIntPipe) id: number";
+        let expected = "id: number";
+        assert_eq!(
+            FrameworkNoiseFilter::strip_inline_decorators(input),
+            expected
+        );
+
+        // Test decorator without arguments followed by parameter
+        let input = "@Body() createUserDto: CreateUserDto";
+        let expected = "createUserDto: CreateUserDto";
+        assert_eq!(
+            FrameworkNoiseFilter::strip_inline_decorators(input),
+            expected
+        );
+
+        // Test multiple inline decorators in method signature
+        let input =
+            "findOne(@Param('id', ParseIntPipe) id: number, @Query('include') include?: string)";
+        let expected = "findOne(id: number, include?: string)";
+        assert_eq!(
+            FrameworkNoiseFilter::strip_inline_decorators(input),
+            expected
+        );
+
+        // Test decorator with complex arguments
+        let input = "@Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number";
+        let expected = "page: number";
+        assert_eq!(
+            FrameworkNoiseFilter::strip_inline_decorators(input),
+            expected
+        );
+
+        // Test no decorators
+        let input = "id: number, name: string";
+        assert_eq!(FrameworkNoiseFilter::strip_inline_decorators(input), input);
+
+        // Test decorator without parentheses
+        let input = "@Body createUserDto: CreateUserDto";
+        let expected = "createUserDto: CreateUserDto";
+        assert_eq!(
+            FrameworkNoiseFilter::strip_inline_decorators(input),
+            expected
+        );
+    }
+
+    #[test]
+    fn test_strip_decorators_with_inline_parameters() {
+        // Test method signature with inline parameter decorators
+        let input = "create(@Body() createUserDto: CreateUserDto): Promise<User>";
+        let expected = "create(createUserDto: CreateUserDto): Promise<User>";
+        assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
+
+        // Test method with multiple decorated parameters
+        let input = "findOne(@Param('id', ParseIntPipe) id: number, @Query('include') include?: string): Promise<User>";
+        let expected = "findOne(id: number, include?: string): Promise<User>";
+        assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
+
+        // Test method with both inline and multi-line decorators
+        let input = "@Get(':id')\nfindOne(@Param('id') id: string): Promise<User>";
+        let expected = "findOne(id: string): Promise<User>";
+        assert_eq!(FrameworkNoiseFilter::strip_decorators(input), expected);
     }
 }
