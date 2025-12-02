@@ -351,7 +351,14 @@ fn convert_with_two_passes(
                     if kind != ScipSymbolKind::File && kind != ScipSymbolKind::Module {
                         match enricher.enrich(&real_path, start_line as usize) {
                             Some(res) => {
-                                let l = if !res.preconditions.is_empty() {
+                                // Only attach logic metadata to methods and functions
+                                // Variables and other symbol kinds should not have logic metadata
+                                // **Validates: Requirements 4.1, 4.2, 4.4**
+                                let l = if matches!(
+                                    kind,
+                                    ScipSymbolKind::Method | ScipSymbolKind::Function
+                                ) && !res.preconditions.is_empty()
+                                {
                                     Some(LogicMetadata {
                                         preconditions: res.preconditions,
                                     })
