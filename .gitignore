@@ -56,6 +56,7 @@ context_map.xml
 
 # Ignora o script empacotado, mas MANTÉM o config
 repomix-pack-codebase.sh
+YCG_context_map.xml
 # Ignora diretórios temporários de ferramentas de AI
 .kiro/
 

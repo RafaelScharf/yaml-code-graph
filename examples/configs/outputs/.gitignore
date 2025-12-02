@@ -1,0 +1,9 @@
+# Ignore all generated outputs
+*.yaml
+*.yml
+*.json
+metrics.csv
+
+# Keep the directory structure
+!.gitignore
+!README.md

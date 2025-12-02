@@ -1,0 +1,57 @@
+============================================================
+PERFORMANCE BENCHMARK ANALYSIS
+============================================================
+
+
+============================================================
+REQUIREMENTS VALIDATION SUMMARY
+============================================================
+
+REQ.10.1: ✅ PASS
+REQ.10.2: ✅ PASS
+
+============================================================
+ALL BENCHMARK RESULTS
+============================================================
+
+Carregando índice SCIP de: "../../examples/simple-ts/index.scip"
+  Time: 390.89ms
+
+ast_caching/with_cache  time:   [130.90 ms 132.55 ms 134.82 ms]
+  Time: 132.55ms
+
+memory_usage/level/0_default
+  Time: 748.80ms
+
+memory_usage/level/1_signatures
+  Time: 751.68ms
+
+memory_usage/level/2_logic
+  Time: 772.98ms
+
+processing_time_nestjs/level/0_default
+  Time: 795.99ms
+
+processing_time_nestjs/level/1_signatures
+  Time: 740.89ms
+
+processing_time_nestjs/level/2_logic
+  Time: 780.62ms
+
+processing_time_simple_ts/level/0_default
+  Time: 136.72ms
+
+processing_time_simple_ts/level/1_signatures
+  Time: 140.77ms
+
+processing_time_simple_ts/level/2_logic
+  Time: 148.92ms
+
+throughput/level_0      time:   [755.83 ms 768.65 ms 783.90 ms]
+  Time: 768.65ms
+
+throughput/level_1      time:   [918.87 ms 1.0128 s 1.1275 s]
+  Time: 1012.80ms
+
+throughput/level_2      time:   [830.08 ms 863.66 ms 902.65 ms]
+  Time: 863.66ms

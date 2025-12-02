@@ -279,7 +279,6 @@ See the `examples/` directory for ready-to-use configurations:
 - `ycg.config.minimal.json` - Minimal configuration
 - `ycg.config.full.json` - All optimizations enabled
 - `ycg.config.typescript.json` - TypeScript project optimized
-- `ycg.config.rust.json` - Rust project optimized
 
 For detailed guidance on choosing optimizations, see [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md).
 
