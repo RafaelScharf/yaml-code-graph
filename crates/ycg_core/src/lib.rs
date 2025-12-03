@@ -326,6 +326,43 @@ fn convert_with_two_passes(
                 }
 
                 let clean_name = extract_name_from_uri(&occurrence.symbol);
+
+                // Resolve generic variable names from source code
+                // **Validates: Requirements 6.1, 6.3, 6.4, 6.5**
+                let final_name = if kind == ScipSymbolKind::Variable && is_generic_name(&clean_name)
+                {
+                    let start_line = occurrence.range.get(0).copied().unwrap_or(0);
+                    let start_col = occurrence.range.get(1).copied().unwrap_or(0);
+
+                    match enricher.resolve_variable_name(
+                        &real_path,
+                        start_line as usize,
+                        start_col as usize,
+                    ) {
+                        Some(resolved) => {
+                            eprintln!(
+                                "✓ Resolved generic name '{}' to '{}' at {}:{}",
+                                clean_name,
+                                resolved,
+                                real_path.display(),
+                                start_line
+                            );
+                            resolved
+                        }
+                        None => {
+                            eprintln!(
+                                "⚠️  Failed to resolve generic name '{}' at {}:{}, using SCIP name",
+                                clean_name,
+                                real_path.display(),
+                                start_line
+                            );
+                            clean_name
+                        }
+                    }
+                } else {
+                    clean_name
+                };
+
                 let extracted_parent = extract_parent_id(&occurrence.symbol);
 
                 let parent_anchor = match extracted_parent {
@@ -388,7 +425,7 @@ fn convert_with_two_passes(
 
                 nodes.push(SymbolNode {
                     id: my_anchor,
-                    name: clean_name,
+                    name: final_name,
                     kind,
                     parent_id: parent_anchor,
                     documentation: doc,
@@ -474,6 +511,43 @@ fn find_enclosing_scope(scopes: &[Scope], line: i32) -> Option<u64> {
         }
     }
     best_scope
+}
+
+/// Checks if a variable name is a generic SCIP-generated name.
+///
+/// SCIP generates generic names for local variables in the format: `[a-z]+[0-9]+`
+/// Examples: status0, timestamp1, user2, result3
+///
+/// **Validates: Requirement 6.2**
+fn is_generic_name(name: &str) -> bool {
+    // Pattern: lowercase letters followed by digits
+    // Examples: status0, timestamp1, user2
+    if name.is_empty() {
+        return false;
+    }
+
+    let mut has_letters = false;
+    let mut has_digits = false;
+    let mut seen_digit = false;
+
+    for ch in name.chars() {
+        if ch.is_ascii_lowercase() {
+            if seen_digit {
+                // Letter after digit - not a generic name
+                return false;
+            }
+            has_letters = true;
+        } else if ch.is_ascii_digit() {
+            has_digits = true;
+            seen_digit = true;
+        } else {
+            // Non-alphanumeric character - not a generic name
+            return false;
+        }
+    }
+
+    // Must have both letters and digits, and end with digits
+    has_letters && has_digits && seen_digit
 }
 
 /// Validates that a variable signature is not a method signature.
@@ -637,4 +711,82 @@ fn extract_name_from_uri(uri: &str) -> String {
         return "unknown".to_string();
     }
     clean
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_generic_name_valid() {
+        // Valid generic names: lowercase letters followed by digits
+        assert!(is_generic_name("status0"));
+        assert!(is_generic_name("timestamp1"));
+        assert!(is_generic_name("user2"));
+        assert!(is_generic_name("result3"));
+        assert!(is_generic_name("data0"));
+        assert!(is_generic_name("value1"));
+        assert!(is_generic_name("item2"));
+        assert!(is_generic_name("a0"));
+        assert!(is_generic_name("abc123"));
+    }
+
+    #[test]
+    fn test_is_generic_name_invalid() {
+        // Invalid: no digits
+        assert!(!is_generic_name("status"));
+        assert!(!is_generic_name("user"));
+        assert!(!is_generic_name("data"));
+
+        // Invalid: no letters
+        assert!(!is_generic_name("0"));
+        assert!(!is_generic_name("123"));
+
+        // Invalid: starts with uppercase
+        assert!(!is_generic_name("Status0"));
+        assert!(!is_generic_name("User1"));
+
+        // Invalid: starts with digit
+        assert!(!is_generic_name("0user"));
+        assert!(!is_generic_name("1status"));
+
+        // Invalid: contains special characters
+        assert!(!is_generic_name("user_id"));
+        assert!(!is_generic_name("user-name"));
+        assert!(!is_generic_name("user.name"));
+        assert!(!is_generic_name("user$0"));
+
+        // Invalid: letters after digits
+        assert!(!is_generic_name("user0name"));
+        assert!(!is_generic_name("status1data"));
+
+        // Invalid: empty string
+        assert!(!is_generic_name(""));
+
+        // Invalid: real variable names
+        assert!(!is_generic_name("userId"));
+        assert!(!is_generic_name("userName"));
+        assert!(!is_generic_name("activeUsers"));
+        assert!(!is_generic_name("myVariable"));
+    }
+
+    #[test]
+    fn test_is_generic_name_edge_cases() {
+        // Edge case: single letter + single digit
+        assert!(is_generic_name("a0"));
+        assert!(is_generic_name("z9"));
+
+        // Edge case: many letters + many digits
+        assert!(is_generic_name("abcdefghij0123456789"));
+
+        // Edge case: mixed case (should fail)
+        assert!(!is_generic_name("User0"));
+        assert!(!is_generic_name("uSer0"));
+
+        // Edge case: only letters (should fail)
+        assert!(!is_generic_name("abcdef"));
+
+        // Edge case: only digits (should fail)
+        assert!(!is_generic_name("123456"));
+    }
 }
