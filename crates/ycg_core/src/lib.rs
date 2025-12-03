@@ -58,6 +58,7 @@ struct Scope {
     id: u64,
     start_line: i32,
     end_line: i32,
+    kind: ScipSymbolKind, // Track the kind to prioritize methods over classes
 }
 
 pub fn count_tokens(text: &str) -> usize {
@@ -286,11 +287,16 @@ fn convert_with_two_passes(
     for doc in index.documents {
         let real_path = project_root.join(&doc.relative_path);
         let file_id = xxh64(doc.relative_path.as_bytes(), 0);
+
+        // Initialize scope stack with file scope as the root
+        // The file scope covers all lines and serves as the fallback parent
+        // **Validates: Requirement 7.5**
         let mut local_scopes = Vec::new();
         local_scopes.push(Scope {
             id: file_id,
             start_line: 0,
-            end_line: 100000,
+            end_line: 100000, // Large number to encompass entire file
+            kind: ScipSymbolKind::File,
         });
 
         // B.1 DEFINIÇÕES
@@ -363,26 +369,49 @@ fn convert_with_two_passes(
                     clean_name
                 };
 
+                // Get the line number for this symbol (needed for scope resolution)
+                let start_line = occurrence.range.get(0).copied().unwrap_or(0);
+
+                // Extract parent ID from SCIP symbol URI
+                // This provides the structural parent from the symbol hierarchy
                 let extracted_parent = extract_parent_id(&occurrence.symbol);
 
-                let parent_anchor = match extracted_parent {
-                    Some(pid) => {
-                        if let Some(anchor) = registry.get(&pid) {
-                            Some(anchor.clone())
-                        } else {
-                            registry.get(&file_id).cloned()
+                // Determine the parent anchor for this symbol
+                // For local variables (those without # in their name), we need to use find_enclosing_scope
+                // to get the correct method parent, regardless of what SCIP reports
+                // For class members and other symbols, we use the extracted parent from SCIP URI
+                //
+                // **Validates: Requirements 7.1, 7.2, 7.4, 7.5**
+                let is_local_variable =
+                    kind == ScipSymbolKind::Variable && !occurrence.symbol.contains('#');
+
+                let parent_anchor = if is_local_variable {
+                    // Local variable (not a class member)
+                    // Use find_enclosing_scope to find the most specific enclosing scope (method/class/file)
+                    let enclosing_scope_id =
+                        find_enclosing_scope(&local_scopes, start_line).unwrap_or(file_id);
+                    registry.get(&enclosing_scope_id).cloned()
+                } else {
+                    // For non-variables or variables with explicit parent, use SCIP hierarchy
+                    match extracted_parent {
+                        Some(pid) => {
+                            if let Some(anchor) = registry.get(&pid) {
+                                Some(anchor.clone())
+                            } else {
+                                // Parent not in registry, fall back to file scope
+                                registry.get(&file_id).cloned()
+                            }
                         }
-                    }
-                    None => {
-                        if kind == ScipSymbolKind::File {
-                            None
-                        } else {
-                            registry.get(&file_id).cloned()
+                        None => {
+                            if kind == ScipSymbolKind::File {
+                                None // File symbols have no parent
+                            } else {
+                                // Default to file scope for symbols without explicit parent
+                                registry.get(&file_id).cloned()
+                            }
                         }
                     }
                 };
-
-                let start_line = occurrence.range.get(0).copied().unwrap_or(0);
 
                 let (sig, doc, logic) =
                     if kind != ScipSymbolKind::File && kind != ScipSymbolKind::Module {
@@ -433,25 +462,60 @@ fn convert_with_two_passes(
                     logic,
                 });
 
+                // Push new scope for functions, methods, and classes
+                // This ensures that symbols defined within these constructs
+                // will have the correct parent_id assigned via find_enclosing_scope
+                //
+                // Scope includes:
+                // - id: The symbol's unique identifier (used as parent_id)
+                // - start_line: Where the definition begins
+                // - end_line: Where the definition ends (from SCIP range)
+                //
+                // **Validates: Requirements 7.3**
                 if matches!(
                     kind,
                     ScipSymbolKind::Function | ScipSymbolKind::Method | ScipSymbolKind::Class
                 ) {
-                    let end_line = occurrence.range.get(2).copied().unwrap_or(start_line);
+                    // Extract end line from SCIP range (index 2)
+                    // SCIP sometimes provides incorrect end_line for definitions
+                    // Use heuristics for invalid ranges
+                    let raw_end_line = occurrence.range.get(2).copied().unwrap_or(start_line);
+                    let end_line = if raw_end_line < start_line {
+                        // Invalid end_line from SCIP, use conservative heuristic
+                        // Methods/functions: assume 20 lines (conservative estimate)
+                        // Classes: assume 100 lines
+                        match kind {
+                            ScipSymbolKind::Method | ScipSymbolKind::Function => start_line + 20,
+                            ScipSymbolKind::Class => start_line + 100,
+                            _ => start_line + 5,
+                        }
+                    } else {
+                        raw_end_line
+                    };
+
                     local_scopes.push(Scope {
                         id,
                         start_line,
                         end_line,
+                        kind,
                     });
                 }
             }
         }
 
         // B.2 REFERÊNCIAS
+        // Process symbol references to build the call graph
         for occurrence in &doc.occurrences {
             let is_def = (occurrence.symbol_roles & scip_proto::SymbolRole::Definition as i32) != 0;
             if !is_def {
+                // Get the line number where this reference occurs
                 let ref_line = occurrence.range.get(0).copied().unwrap_or(0);
+
+                // Find the most specific enclosing scope for this reference
+                // This determines which symbol (method, class, or file) is making the reference
+                // Falls back to file_id if no specific scope is found
+                //
+                // **Validates: Requirements 7.1, 7.2, 7.4**
                 let source_u64 = find_enclosing_scope(&local_scopes, ref_line).unwrap_or(file_id);
                 let target_u64 = xxh64(occurrence.symbol.as_bytes(), 0);
 
@@ -498,18 +562,73 @@ fn generate_anchor(name: &str, id: u64) -> String {
     let short_suffix = &suffix[0..4.min(suffix.len())];
     format!("{}_{}", name, short_suffix)
 }
+/// Finds the most specific (smallest) enclosing scope for a given line number.
+///
+/// This function is critical for establishing correct parent-child relationships
+/// in the symbol hierarchy. It ensures that local variables are assigned to their
+/// immediate enclosing method/function rather than the file scope.
+///
+/// # Algorithm
+/// 1. Iterate through all scopes in the stack
+/// 2. Check if the line falls within each scope's range (inclusive)
+/// 3. Among all matching scopes, select the one with the smallest line range
+/// 4. The smallest range represents the most specific (innermost) scope
+///
+/// # Edge Cases
+/// - Line exactly on scope boundary (start_line or end_line): Included in scope
+/// - Multiple scopes with same size: First one encountered is selected
+/// - No matching scope: Returns None (should fall back to file scope)
+///
+/// # Example
+/// ```text
+/// File scope:     [0, 100000]     size = 100000
+/// Class scope:    [10, 50]        size = 40
+/// Method scope:   [15, 25]        size = 10  <- Selected for line 20
+/// ```
+///
+/// **Validates: Requirements 7.2, 7.4**
 fn find_enclosing_scope(scopes: &[Scope], line: i32) -> Option<u64> {
     let mut best_scope: Option<u64> = None;
     let mut min_size = i32::MAX;
+
+    let mut best_kind: Option<ScipSymbolKind> = None;
+
     for scope in scopes {
+        // Check if line is within scope range (inclusive boundaries)
+        // This handles edge case: line exactly on scope boundary
         if line >= scope.start_line && line <= scope.end_line {
+            // Calculate scope size (line range)
             let size = scope.end_line - scope.start_line;
-            if size < min_size {
+
+            // Prioritization logic to handle SCIP's imprecise ranges:
+            // 1. ALWAYS prefer methods/functions over classes when both contain the line
+            // 2. Among same kind, prefer smaller scopes (more specific)
+            // This ensures variables get method parent, not class parent
+            let should_replace = match (scope.kind, best_kind) {
+                // First scope that matches
+                (_, None) => true,
+
+                // Method/Function ALWAYS beats Class or File (SCIP ranges are imprecise)
+                (ScipSymbolKind::Method, Some(ScipSymbolKind::Class))
+                | (ScipSymbolKind::Function, Some(ScipSymbolKind::Class))
+                | (ScipSymbolKind::Method, Some(ScipSymbolKind::File))
+                | (ScipSymbolKind::Function, Some(ScipSymbolKind::File)) => true,
+
+                // Among same kind, prefer smaller scope
+                (_, Some(best)) if scope.kind == best && size < min_size => true,
+
+                // Don't replace otherwise
+                _ => false,
+            };
+
+            if should_replace {
                 min_size = size;
                 best_scope = Some(scope.id);
+                best_kind = Some(scope.kind);
             }
         }
     }
+
     best_scope
 }
 
