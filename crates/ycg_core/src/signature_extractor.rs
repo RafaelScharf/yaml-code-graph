@@ -77,19 +77,124 @@ impl SignatureExtractor {
         None
     }
 
+    /// Check if a signature matches QueryBuilder pattern
+    ///
+    /// Detects QueryBuilder patterns by checking for:
+    /// - 2+ QueryBuilder keywords (createQueryBuilder, select, where, getMany, getOne, leftJoin)
+    /// - Signature length > 100 characters
+    ///
+    /// **Validates: Requirements 5.1, 5.2**
+    fn is_query_builder_pattern(sig: &str) -> bool {
+        let qb_keywords = [
+            "createQueryBuilder",
+            "select",
+            "where",
+            "getMany",
+            "getOne",
+            "leftJoin",
+        ];
+
+        let keyword_count = qb_keywords.iter().filter(|kw| sig.contains(*kw)).count();
+
+        keyword_count >= 2 && sig.len() > 100
+    }
+
+    /// Extract entity type from QueryBuilder signature
+    ///
+    /// Attempts to infer the entity type from createQueryBuilder call.
+    /// Pattern: createQueryBuilder(EntityName, ...)
+    ///
+    /// Returns: Some(entity_type) or None if not found
+    ///
+    /// **Validates: Requirement 5.3**
+    fn extract_entity_type(sig: &str) -> Option<String> {
+        // Look for createQueryBuilder( pattern
+        if let Some(start) = sig.find("createQueryBuilder(") {
+            let after = &sig[start + 19..]; // Skip "createQueryBuilder("
+
+            // Skip whitespace
+            let after = after.trim_start();
+
+            // Check if it starts with a quote
+            let first_char = after.chars().next()?;
+
+            if first_char == '\'' || first_char == '"' {
+                // Find the matching closing quote
+                let quote_char = first_char;
+                let content = &after[1..]; // Skip opening quote
+
+                if let Some(end_quote) = content.find(quote_char) {
+                    let entity = &content[..end_quote];
+                    if !entity.is_empty() {
+                        return Some(entity.to_string());
+                    }
+                }
+            } else if first_char == ')' {
+                // Empty createQueryBuilder() - no entity type
+                return None;
+            } else {
+                // No quotes, find the first comma or closing paren
+                let end_pos = after
+                    .find(',')
+                    .or_else(|| after.find(')'))
+                    .unwrap_or(after.len());
+
+                let entity = after[..end_pos].trim();
+
+                // Check if entity looks valid (not starting with special chars)
+                if !entity.is_empty() && !entity.starts_with('.') && !entity.starts_with(')') {
+                    return Some(entity.to_string());
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Summarize QueryBuilder signature to compact format
+    ///
+    /// Formats as:
+    /// - variableName: EntityType (for getOne)
+    /// - variableName: EntityType[] (for getMany)
+    /// - variableName: QueryResult (fallback)
+    ///
+    /// **Validates: Requirements 5.4, 5.6**
+    fn summarize_query_builder(sig: &str, var_name: &str) -> String {
+        let entity_type =
+            Self::extract_entity_type(sig).unwrap_or_else(|| "QueryResult".to_string());
+
+        let is_array = sig.contains("getMany");
+
+        if is_array {
+            format!("{}: {}[]", var_name, entity_type)
+        } else {
+            format!("{}: {}", var_name, entity_type)
+        }
+    }
+
     /// Compact a signature by abbreviating types and removing unnecessary keywords
     ///
     /// Transformations:
+    /// - Check for QueryBuilder pattern and summarize if detected
+    /// - Remove decorators (framework noise)
     /// - Remove async/export/public keywords
     /// - Abbreviate parameter types
     /// - Abbreviate return type
     /// - Remove whitespace
     /// - Handle optional return types (| null, | undefined)
     ///
-    /// **Validates: Requirements 2.2, 2.3, 2.4, 2.5**
+    /// **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 5.1, 5.2, 5.3, 5.4, 5.6**
     fn compact_signature(sig: &str, method_name: &str) -> String {
+        // Check if this is a QueryBuilder pattern and summarize if so
+        if Self::is_query_builder_pattern(sig) {
+            return Self::summarize_query_builder(sig, method_name);
+        }
+        // First, remove decorators (framework noise)
+        use crate::framework_filter::FrameworkNoiseFilter;
+        let sig_without_decorators = FrameworkNoiseFilter::strip_decorators(sig);
+
         // Remove leading keywords (async, export, public, etc.)
-        let cleaned = sig
+        let cleaned = sig_without_decorators
             .replace("async ", "")
             .replace("export ", "")
             .replace("public ", "")
@@ -146,6 +251,26 @@ impl SignatureExtractor {
             match ch {
                 '(' => depth += 1,
                 ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(start + i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Find matching closing angle bracket for generics
+    ///
+    /// Similar to find_matching_paren but for angle brackets
+    fn find_matching_angle_bracket(s: &str, start: usize) -> Option<usize> {
+        let mut depth = 0;
+        for (i, ch) in s[start..].char_indices() {
+            match ch {
+                '<' => depth += 1,
+                '>' => {
                     depth -= 1;
                     if depth == 0 {
                         return Some(start + i);
@@ -293,33 +418,99 @@ impl SignatureExtractor {
     /// - "User | null" → "User?"
     /// - "string | undefined" → "str?"
     /// - "User | null | undefined" → "User?"
+    /// - "Promise<InternalUser | undefined>" → "Promise<InternalUser>?"
     /// - "boolean | Promise<boolean> | Observable<boolean>" → "bool" (takes first type for simplicity)
     ///
     /// **Validates: Requirement 2.4**
     fn normalize_optional_type(type_str: &str) -> String {
         let trimmed = type_str.trim();
 
-        // Check if it's a union with null or undefined
+        // Check if it's a generic type with union inside (e.g., Promise<User | null>)
+        if let Some(generic_start) = trimmed.find('<') {
+            // Find the matching closing bracket
+            if let Some(generic_end) = Self::find_matching_angle_bracket(trimmed, generic_start) {
+                let base_type = &trimmed[..generic_start];
+                let generic_content = &trimmed[generic_start + 1..generic_end];
+                let after_generic = &trimmed[generic_end + 1..];
+
+                // Recursively normalize the generic content
+                let normalized_content = Self::normalize_optional_type(generic_content);
+
+                // Check if the normalized content is optional
+                if normalized_content.ends_with('?') {
+                    // Remove the ? from inside and add it outside
+                    let content_without_optional = normalized_content.trim_end_matches('?');
+                    return format!(
+                        "{}<{}>?{}",
+                        base_type, content_without_optional, after_generic
+                    );
+                } else {
+                    return format!("{}<{}>{}", base_type, normalized_content, after_generic);
+                }
+            }
+        }
+
+        // Check if it's a union with null or undefined at the top level
         if trimmed.contains('|') {
-            // Split by | and filter out null/undefined
-            let parts: Vec<&str> = trimmed
-                .split('|')
-                .map(|s| s.trim())
-                .filter(|s| *s != "null" && *s != "undefined")
+            // Split by | respecting brackets (don't split inside <>, (), [])
+            let parts = Self::split_union_types(trimmed);
+
+            // Filter out null/undefined
+            let filtered: Vec<String> = parts
+                .into_iter()
+                .filter(|s| s != "null" && s != "undefined")
                 .collect();
 
-            if parts.len() == 1 {
+            if filtered.len() == 1 {
                 // Single type with null/undefined → make it optional
-                return format!("{}?", parts[0]);
-            } else if parts.len() > 1 {
+                return format!("{}?", filtered[0]);
+            } else if filtered.len() > 1 {
                 // Multiple types in union (e.g., boolean | Promise<boolean> | Observable<boolean>)
                 // For compactness, take the first type only
                 // This is a simplification for token efficiency
-                return parts[0].to_string();
+                return filtered[0].clone();
             }
         }
 
         trimmed.to_string()
+    }
+
+    /// Split union types by | respecting nested brackets
+    ///
+    /// Handles:
+    /// - "Promise<User | null>" → ["Promise<User | null>"] (doesn't split inside <>)
+    /// - "User | null" → ["User", "null"]
+    /// - "Promise<Result<T>> | undefined" → ["Promise<Result<T>>", "undefined"]
+    fn split_union_types(type_str: &str) -> Vec<String> {
+        let mut parts = Vec::new();
+        let mut current = String::new();
+        let mut depth = 0;
+
+        for ch in type_str.chars() {
+            match ch {
+                '<' | '(' | '[' => {
+                    depth += 1;
+                    current.push(ch);
+                }
+                '>' | ')' | ']' => {
+                    depth -= 1;
+                    current.push(ch);
+                }
+                '|' if depth == 0 => {
+                    if !current.trim().is_empty() {
+                        parts.push(current.trim().to_string());
+                        current.clear();
+                    }
+                }
+                _ => current.push(ch),
+            }
+        }
+
+        if !current.trim().is_empty() {
+            parts.push(current.trim().to_string());
+        }
+
+        parts
     }
 }
 
@@ -472,6 +663,32 @@ mod tests {
         // Multiple types with null - for compactness, take first type only
         let result = SignatureExtractor::normalize_optional_type("User | Admin | null");
         assert_eq!(result, "User");
+    }
+
+    #[test]
+    fn test_normalize_optional_type_nested_generic() {
+        // Should not split inside generics
+        let result =
+            SignatureExtractor::normalize_optional_type("Promise<InternalUser | undefined>");
+        assert_eq!(result, "Promise<InternalUser>?");
+    }
+
+    #[test]
+    fn test_split_union_types_simple() {
+        let result = SignatureExtractor::split_union_types("User | null");
+        assert_eq!(result, vec!["User", "null"]);
+    }
+
+    #[test]
+    fn test_split_union_types_nested_generic() {
+        let result = SignatureExtractor::split_union_types("Promise<InternalUser | undefined>");
+        assert_eq!(result, vec!["Promise<InternalUser | undefined>"]);
+    }
+
+    #[test]
+    fn test_split_union_types_complex() {
+        let result = SignatureExtractor::split_union_types("Promise<Result<T>> | undefined");
+        assert_eq!(result, vec!["Promise<Result<T>>", "undefined"]);
     }
 
     #[test]
@@ -645,5 +862,137 @@ mod tests {
         let result = SignatureExtractor::compact_signature(sig, "search");
 
         assert_eq!(result, "search(query:str,limit:num?,offset:num?):User[]");
+    }
+
+    // QueryBuilder Tests - Requirement 5.x
+
+    #[test]
+    fn test_is_query_builder_pattern_positive() {
+        // Requirement 5.1, 5.2: Detect QueryBuilder pattern with 2+ keywords and length > 100
+        let sig = "const users = await this.userRepository.createQueryBuilder('user').select('user.id').where('user.active = :active', { active: true }).getMany()";
+        assert!(SignatureExtractor::is_query_builder_pattern(sig));
+    }
+
+    #[test]
+    fn test_is_query_builder_pattern_negative_too_short() {
+        // Should not match if length <= 100
+        let sig = "createQueryBuilder('user').getMany()";
+        assert!(!SignatureExtractor::is_query_builder_pattern(sig));
+    }
+
+    #[test]
+    fn test_is_query_builder_pattern_negative_one_keyword() {
+        // Should not match with only 1 keyword
+        let sig = "const result = this.repository.createQueryBuilder('entity').andThisIsAVeryLongStringToMakeItLongerThan100Characters()";
+        assert!(!SignatureExtractor::is_query_builder_pattern(sig));
+    }
+
+    #[test]
+    fn test_extract_entity_type_simple() {
+        // Requirement 5.3: Extract entity type from createQueryBuilder
+        let sig = "createQueryBuilder('User', 'user')";
+        let result = SignatureExtractor::extract_entity_type(sig);
+        assert_eq!(result, Some("User".to_string()));
+    }
+
+    #[test]
+    fn test_extract_entity_type_with_quotes() {
+        // Should handle both single and double quotes
+        let sig = r#"createQueryBuilder("User")"#;
+        let result = SignatureExtractor::extract_entity_type(sig);
+        assert_eq!(result, Some("User".to_string()));
+    }
+
+    #[test]
+    fn test_extract_entity_type_complex() {
+        // Extract from complex QueryBuilder chain
+        let sig = "this.userRepository.createQueryBuilder('User', 'u').select('u.id').where('u.active = :active').getMany()";
+        let result = SignatureExtractor::extract_entity_type(sig);
+        assert_eq!(result, Some("User".to_string()));
+    }
+
+    #[test]
+    fn test_extract_entity_type_not_found() {
+        // Should return None if pattern not found
+        let sig = "some other code without createQueryBuilder";
+        let result = SignatureExtractor::extract_entity_type(sig);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_summarize_query_builder_get_many() {
+        // Requirement 5.4, 5.6: Summarize with array notation for getMany
+        let sig = "const users = await this.userRepository.createQueryBuilder('User').select('user.id').where('user.active = :active', { active: true }).getMany()";
+        let result = SignatureExtractor::summarize_query_builder(sig, "users");
+        assert_eq!(result, "users: User[]");
+    }
+
+    #[test]
+    fn test_summarize_query_builder_get_one() {
+        // Requirement 5.4, 5.6: Summarize without array notation for getOne
+        let sig = "const user = await this.userRepository.createQueryBuilder('User').select('user.id').where('user.id = :id', { id: userId }).getOne()";
+        let result = SignatureExtractor::summarize_query_builder(sig, "user");
+        assert_eq!(result, "user: User");
+    }
+
+    #[test]
+    fn test_summarize_query_builder_fallback() {
+        // Requirement 5.6: Fallback to QueryResult when entity type not found
+        let sig =
+            "const result = await someComplexQuery().select('field').where('condition').getMany()";
+        let result = SignatureExtractor::summarize_query_builder(sig, "result");
+        assert_eq!(result, "result: QueryResult[]");
+    }
+
+    #[test]
+    fn test_compact_signature_with_query_builder() {
+        // Integration test: compact_signature should detect and summarize QueryBuilder
+        let sig = "const activeUsers = await this.userRepository.createQueryBuilder('User', 'u').select('u.id, u.name, u.email').where('u.active = :active', { active: true }).orderBy('u.createdAt', 'DESC').getMany()";
+        let result = SignatureExtractor::compact_signature(sig, "activeUsers");
+
+        // Should be summarized to compact format
+        assert_eq!(result, "activeUsers: User[]");
+
+        // Should be much shorter than original (< 100 chars)
+        assert!(result.len() < 100);
+    }
+
+    #[test]
+    fn test_compact_signature_query_builder_length_requirement() {
+        // Requirement 5.6: Summarized signature should be < 100 characters
+        let sig = "const veryLongVariableNameForTestingPurposes = await this.repository.createQueryBuilder('EntityWithVeryLongName').select('field1, field2, field3').where('condition1 AND condition2').getMany()";
+        let result =
+            SignatureExtractor::compact_signature(sig, "veryLongVariableNameForTestingPurposes");
+
+        assert!(
+            result.len() < 100,
+            "Summarized signature should be < 100 chars, got: {}",
+            result.len()
+        );
+    }
+
+    #[test]
+    fn test_query_builder_with_left_join() {
+        // Test detection with leftJoin keyword
+        let sig = "const users = await this.userRepository.createQueryBuilder('User', 'u').leftJoin('u.profile', 'profile').select('u.id, profile.bio').where('u.active = true').getMany()";
+
+        assert!(SignatureExtractor::is_query_builder_pattern(sig));
+
+        let result = SignatureExtractor::compact_signature(sig, "users");
+        assert_eq!(result, "users: User[]");
+    }
+
+    #[test]
+    fn test_non_query_builder_long_signature() {
+        // Long signature that is NOT a QueryBuilder should not be summarized
+        let sig = "async function processUserData(userId: string, options: ProcessOptions, callback: (result: ProcessResult) => void): Promise<UserData>";
+
+        assert!(!SignatureExtractor::is_query_builder_pattern(sig));
+
+        let result = SignatureExtractor::compact_signature(sig, "processUserData");
+
+        // Should be compacted normally, not summarized as QueryBuilder
+        assert!(result.contains("processUserData"));
+        assert!(result.contains("userId:str"));
     }
 }

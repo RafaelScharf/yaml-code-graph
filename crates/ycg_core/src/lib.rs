@@ -58,6 +58,7 @@ struct Scope {
     id: u64,
     start_line: i32,
     end_line: i32,
+    kind: ScipSymbolKind, // Track the kind to prioritize methods over classes
 }
 
 pub fn count_tokens(text: &str) -> usize {
@@ -286,11 +287,16 @@ fn convert_with_two_passes(
     for doc in index.documents {
         let real_path = project_root.join(&doc.relative_path);
         let file_id = xxh64(doc.relative_path.as_bytes(), 0);
+
+        // Initialize scope stack with file scope as the root
+        // The file scope covers all lines and serves as the fallback parent
+        // **Validates: Requirement 7.5**
         let mut local_scopes = Vec::new();
         local_scopes.push(Scope {
             id: file_id,
             start_line: 0,
-            end_line: 100000,
+            end_line: 100000, // Large number to encompass entire file
+            kind: ScipSymbolKind::File,
         });
 
         // B.1 DEFINIÇÕES
@@ -326,39 +332,114 @@ fn convert_with_two_passes(
                 }
 
                 let clean_name = extract_name_from_uri(&occurrence.symbol);
-                let extracted_parent = extract_parent_id(&occurrence.symbol);
 
-                let parent_anchor = match extracted_parent {
-                    Some(pid) => {
-                        if let Some(anchor) = registry.get(&pid) {
-                            Some(anchor.clone())
-                        } else {
-                            registry.get(&file_id).cloned()
+                // Resolve generic variable names from source code
+                // **Validates: Requirements 6.1, 6.3, 6.4, 6.5**
+                let final_name = if kind == ScipSymbolKind::Variable && is_generic_name(&clean_name)
+                {
+                    let start_line = occurrence.range.get(0).copied().unwrap_or(0);
+                    let start_col = occurrence.range.get(1).copied().unwrap_or(0);
+
+                    match enricher.resolve_variable_name(
+                        &real_path,
+                        start_line as usize,
+                        start_col as usize,
+                    ) {
+                        Some(resolved) => {
+                            eprintln!(
+                                "✓ Resolved generic name '{}' to '{}' at {}:{}",
+                                clean_name,
+                                resolved,
+                                real_path.display(),
+                                start_line
+                            );
+                            resolved
+                        }
+                        None => {
+                            eprintln!(
+                                "⚠️  Failed to resolve generic name '{}' at {}:{}, using SCIP name",
+                                clean_name,
+                                real_path.display(),
+                                start_line
+                            );
+                            clean_name
                         }
                     }
-                    None => {
-                        if kind == ScipSymbolKind::File {
-                            None
-                        } else {
-                            registry.get(&file_id).cloned()
+                } else {
+                    clean_name
+                };
+
+                // Get the line number for this symbol (needed for scope resolution)
+                let start_line = occurrence.range.get(0).copied().unwrap_or(0);
+
+                // Extract parent ID from SCIP symbol URI
+                // This provides the structural parent from the symbol hierarchy
+                let extracted_parent = extract_parent_id(&occurrence.symbol);
+
+                // Determine the parent anchor for this symbol
+                // For local variables (those without # in their name), we need to use find_enclosing_scope
+                // to get the correct method parent, regardless of what SCIP reports
+                // For class members and other symbols, we use the extracted parent from SCIP URI
+                //
+                // **Validates: Requirements 7.1, 7.2, 7.4, 7.5**
+                let is_local_variable =
+                    kind == ScipSymbolKind::Variable && !occurrence.symbol.contains('#');
+
+                let parent_anchor = if is_local_variable {
+                    // Local variable (not a class member)
+                    // Use find_enclosing_scope to find the most specific enclosing scope (method/class/file)
+                    let enclosing_scope_id =
+                        find_enclosing_scope(&local_scopes, start_line).unwrap_or(file_id);
+                    registry.get(&enclosing_scope_id).cloned()
+                } else {
+                    // For non-variables or variables with explicit parent, use SCIP hierarchy
+                    match extracted_parent {
+                        Some(pid) => {
+                            if let Some(anchor) = registry.get(&pid) {
+                                Some(anchor.clone())
+                            } else {
+                                // Parent not in registry, fall back to file scope
+                                registry.get(&file_id).cloned()
+                            }
+                        }
+                        None => {
+                            if kind == ScipSymbolKind::File {
+                                None // File symbols have no parent
+                            } else {
+                                // Default to file scope for symbols without explicit parent
+                                registry.get(&file_id).cloned()
+                            }
                         }
                     }
                 };
-
-                let start_line = occurrence.range.get(0).copied().unwrap_or(0);
 
                 let (sig, doc, logic) =
                     if kind != ScipSymbolKind::File && kind != ScipSymbolKind::Module {
                         match enricher.enrich(&real_path, start_line as usize) {
                             Some(res) => {
-                                let l = if !res.preconditions.is_empty() {
+                                // Only attach logic metadata to methods and functions
+                                // Variables and other symbol kinds should not have logic metadata
+                                // **Validates: Requirements 4.1, 4.2, 4.4**
+                                let l = if matches!(
+                                    kind,
+                                    ScipSymbolKind::Method | ScipSymbolKind::Function
+                                ) && !res.preconditions.is_empty()
+                                {
                                     Some(LogicMetadata {
                                         preconditions: res.preconditions,
                                     })
                                 } else {
                                     None
                                 };
-                                (res.signature, res.documentation, l)
+
+                                // Validate variable signatures to prevent inheriting method signatures
+                                let validated_sig = if kind == ScipSymbolKind::Variable {
+                                    validate_variable_signature(res.signature, &occurrence.symbol)
+                                } else {
+                                    res.signature
+                                };
+
+                                (validated_sig, res.documentation, l)
                             }
                             None => (None, None, None),
                         }
@@ -373,7 +454,7 @@ fn convert_with_two_passes(
 
                 nodes.push(SymbolNode {
                     id: my_anchor,
-                    name: clean_name,
+                    name: final_name,
                     kind,
                     parent_id: parent_anchor,
                     documentation: doc,
@@ -381,25 +462,60 @@ fn convert_with_two_passes(
                     logic,
                 });
 
+                // Push new scope for functions, methods, and classes
+                // This ensures that symbols defined within these constructs
+                // will have the correct parent_id assigned via find_enclosing_scope
+                //
+                // Scope includes:
+                // - id: The symbol's unique identifier (used as parent_id)
+                // - start_line: Where the definition begins
+                // - end_line: Where the definition ends (from SCIP range)
+                //
+                // **Validates: Requirements 7.3**
                 if matches!(
                     kind,
                     ScipSymbolKind::Function | ScipSymbolKind::Method | ScipSymbolKind::Class
                 ) {
-                    let end_line = occurrence.range.get(2).copied().unwrap_or(start_line);
+                    // Extract end line from SCIP range (index 2)
+                    // SCIP sometimes provides incorrect end_line for definitions
+                    // Use heuristics for invalid ranges
+                    let raw_end_line = occurrence.range.get(2).copied().unwrap_or(start_line);
+                    let end_line = if raw_end_line < start_line {
+                        // Invalid end_line from SCIP, use conservative heuristic
+                        // Methods/functions: assume 20 lines (conservative estimate)
+                        // Classes: assume 100 lines
+                        match kind {
+                            ScipSymbolKind::Method | ScipSymbolKind::Function => start_line + 20,
+                            ScipSymbolKind::Class => start_line + 100,
+                            _ => start_line + 5,
+                        }
+                    } else {
+                        raw_end_line
+                    };
+
                     local_scopes.push(Scope {
                         id,
                         start_line,
                         end_line,
+                        kind,
                     });
                 }
             }
         }
 
         // B.2 REFERÊNCIAS
+        // Process symbol references to build the call graph
         for occurrence in &doc.occurrences {
             let is_def = (occurrence.symbol_roles & scip_proto::SymbolRole::Definition as i32) != 0;
             if !is_def {
+                // Get the line number where this reference occurs
                 let ref_line = occurrence.range.get(0).copied().unwrap_or(0);
+
+                // Find the most specific enclosing scope for this reference
+                // This determines which symbol (method, class, or file) is making the reference
+                // Falls back to file_id if no specific scope is found
+                //
+                // **Validates: Requirements 7.1, 7.2, 7.4**
                 let source_u64 = find_enclosing_scope(&local_scopes, ref_line).unwrap_or(file_id);
                 let target_u64 = xxh64(occurrence.symbol.as_bytes(), 0);
 
@@ -446,19 +562,209 @@ fn generate_anchor(name: &str, id: u64) -> String {
     let short_suffix = &suffix[0..4.min(suffix.len())];
     format!("{}_{}", name, short_suffix)
 }
+/// Finds the most specific (smallest) enclosing scope for a given line number.
+///
+/// This function is critical for establishing correct parent-child relationships
+/// in the symbol hierarchy. It ensures that local variables are assigned to their
+/// immediate enclosing method/function rather than the file scope.
+///
+/// # Algorithm
+/// 1. Iterate through all scopes in the stack
+/// 2. Check if the line falls within each scope's range (inclusive)
+/// 3. Among all matching scopes, select the one with the smallest line range
+/// 4. The smallest range represents the most specific (innermost) scope
+///
+/// # Edge Cases
+/// - Line exactly on scope boundary (start_line or end_line): Included in scope
+/// - Multiple scopes with same size: First one encountered is selected
+/// - No matching scope: Returns None (should fall back to file scope)
+///
+/// # Example
+/// ```text
+/// File scope:     [0, 100000]     size = 100000
+/// Class scope:    [10, 50]        size = 40
+/// Method scope:   [15, 25]        size = 10  <- Selected for line 20
+/// ```
+///
+/// **Validates: Requirements 7.2, 7.4**
 fn find_enclosing_scope(scopes: &[Scope], line: i32) -> Option<u64> {
     let mut best_scope: Option<u64> = None;
     let mut min_size = i32::MAX;
+
+    let mut best_kind: Option<ScipSymbolKind> = None;
+
     for scope in scopes {
+        // Check if line is within scope range (inclusive boundaries)
+        // This handles edge case: line exactly on scope boundary
         if line >= scope.start_line && line <= scope.end_line {
+            // Calculate scope size (line range)
             let size = scope.end_line - scope.start_line;
-            if size < min_size {
+
+            // Prioritization logic to handle SCIP's imprecise ranges:
+            // 1. ALWAYS prefer methods/functions over classes when both contain the line
+            // 2. Among same kind, prefer smaller scopes (more specific)
+            // This ensures variables get method parent, not class parent
+            let should_replace = match (scope.kind, best_kind) {
+                // First scope that matches
+                (_, None) => true,
+
+                // Method/Function ALWAYS beats Class or File (SCIP ranges are imprecise)
+                (ScipSymbolKind::Method, Some(ScipSymbolKind::Class))
+                | (ScipSymbolKind::Function, Some(ScipSymbolKind::Class))
+                | (ScipSymbolKind::Method, Some(ScipSymbolKind::File))
+                | (ScipSymbolKind::Function, Some(ScipSymbolKind::File)) => true,
+
+                // Among same kind, prefer smaller scope
+                (_, Some(best)) if scope.kind == best && size < min_size => true,
+
+                // Don't replace otherwise
+                _ => false,
+            };
+
+            if should_replace {
                 min_size = size;
                 best_scope = Some(scope.id);
+                best_kind = Some(scope.kind);
             }
         }
     }
+
     best_scope
+}
+
+/// Checks if a variable name is a generic SCIP-generated name.
+///
+/// SCIP generates generic names for local variables in the format: `[a-z]+[0-9]+`
+/// Examples: status0, timestamp1, user2, result3
+///
+/// **Validates: Requirement 6.2**
+fn is_generic_name(name: &str) -> bool {
+    // Pattern: lowercase letters followed by digits
+    // Examples: status0, timestamp1, user2
+    if name.is_empty() {
+        return false;
+    }
+
+    let mut has_letters = false;
+    let mut has_digits = false;
+    let mut seen_digit = false;
+
+    for ch in name.chars() {
+        if ch.is_ascii_lowercase() {
+            if seen_digit {
+                // Letter after digit - not a generic name
+                return false;
+            }
+            has_letters = true;
+        } else if ch.is_ascii_digit() {
+            has_digits = true;
+            seen_digit = true;
+        } else {
+            // Non-alphanumeric character - not a generic name
+            return false;
+        }
+    }
+
+    // Must have both letters and digits, and end with digits
+    has_letters && has_digits && seen_digit
+}
+
+/// Validates that a variable signature is not a method signature.
+///
+/// Variables should have simple type signatures like `variableName: Type`,
+/// not method signatures containing function patterns. This function implements
+/// comprehensive validation to prevent variables from inheriting parent method signatures.
+///
+/// # Validation Patterns
+/// Rejects signatures containing:
+/// - `function` keyword (method declarations)
+/// - `=>` arrow function syntax
+/// - `async` keyword (async method pattern)
+/// - `@Decorator(...)` patterns (method parameter decorators)
+/// - Return type annotations after closing paren `) :`
+/// - Empty parentheses `()` (method calls or declarations)
+///
+/// # Arguments
+/// * `sig` - The signature to validate
+/// * `symbol_uri` - The SCIP symbol URI for logging purposes
+///
+/// # Returns
+/// * `None` if the signature contains method-like patterns (rejected)
+/// * The original signature if it's valid for a variable
+///
+/// # Examples
+/// ```
+/// // ✅ Valid variable signatures (accepted):
+/// // "userId: number"
+/// // "username: string"
+/// // "user: User"
+///
+/// // ❌ Invalid variable signatures (rejected):
+/// // "findOne(@Param('id', ParseIntPipe) id:num):Promise<UserDto>"
+/// // "async function getData(): Promise<Data>"
+/// // "catch(exception: unknown, host: ArgumentsHost)"
+/// ```
+fn validate_variable_signature(sig: Option<String>, symbol_uri: &str) -> Option<String> {
+    if let Some(ref s) = sig {
+        // Pattern 1: Contains function keyword
+        if s.contains("function") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains 'function'",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 2: Contains arrow function syntax
+        if s.contains("=>") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains '=>'",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 3: Starts with async (method pattern)
+        if s.trim().starts_with("async ") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: starts with 'async'",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 4: Contains parameter list with decorators (e.g., @Param('id', ParseIntPipe))
+        if s.contains('@') && s.contains('(') {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains decorator pattern",
+                symbol_uri
+            );
+            return None;
+        }
+
+        // Pattern 5: Contains return type annotation with colon after closing paren
+        // Example: "findOne(id: number): Promise<UserDto>"
+        if let Some(paren_pos) = s.rfind(')') {
+            let after_paren = &s[paren_pos + 1..].trim();
+            if after_paren.starts_with(':') {
+                eprintln!(
+                    "⚠️  Rejecting method signature for variable {}: contains return type annotation",
+                    symbol_uri
+                );
+                return None;
+            }
+        }
+
+        // Pattern 6: Contains empty parentheses (method call or declaration)
+        if s.contains("()") {
+            eprintln!(
+                "⚠️  Rejecting method signature for variable {}: contains '()'",
+                symbol_uri
+            );
+            return None;
+        }
+    }
+    sig
 }
 fn extract_parent_id(symbol: &str) -> Option<u64> {
     let mut chars: Vec<char> = symbol.chars().collect();
@@ -524,4 +830,82 @@ fn extract_name_from_uri(uri: &str) -> String {
         return "unknown".to_string();
     }
     clean
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_generic_name_valid() {
+        // Valid generic names: lowercase letters followed by digits
+        assert!(is_generic_name("status0"));
+        assert!(is_generic_name("timestamp1"));
+        assert!(is_generic_name("user2"));
+        assert!(is_generic_name("result3"));
+        assert!(is_generic_name("data0"));
+        assert!(is_generic_name("value1"));
+        assert!(is_generic_name("item2"));
+        assert!(is_generic_name("a0"));
+        assert!(is_generic_name("abc123"));
+    }
+
+    #[test]
+    fn test_is_generic_name_invalid() {
+        // Invalid: no digits
+        assert!(!is_generic_name("status"));
+        assert!(!is_generic_name("user"));
+        assert!(!is_generic_name("data"));
+
+        // Invalid: no letters
+        assert!(!is_generic_name("0"));
+        assert!(!is_generic_name("123"));
+
+        // Invalid: starts with uppercase
+        assert!(!is_generic_name("Status0"));
+        assert!(!is_generic_name("User1"));
+
+        // Invalid: starts with digit
+        assert!(!is_generic_name("0user"));
+        assert!(!is_generic_name("1status"));
+
+        // Invalid: contains special characters
+        assert!(!is_generic_name("user_id"));
+        assert!(!is_generic_name("user-name"));
+        assert!(!is_generic_name("user.name"));
+        assert!(!is_generic_name("user$0"));
+
+        // Invalid: letters after digits
+        assert!(!is_generic_name("user0name"));
+        assert!(!is_generic_name("status1data"));
+
+        // Invalid: empty string
+        assert!(!is_generic_name(""));
+
+        // Invalid: real variable names
+        assert!(!is_generic_name("userId"));
+        assert!(!is_generic_name("userName"));
+        assert!(!is_generic_name("activeUsers"));
+        assert!(!is_generic_name("myVariable"));
+    }
+
+    #[test]
+    fn test_is_generic_name_edge_cases() {
+        // Edge case: single letter + single digit
+        assert!(is_generic_name("a0"));
+        assert!(is_generic_name("z9"));
+
+        // Edge case: many letters + many digits
+        assert!(is_generic_name("abcdefghij0123456789"));
+
+        // Edge case: mixed case (should fail)
+        assert!(!is_generic_name("User0"));
+        assert!(!is_generic_name("uSer0"));
+
+        // Edge case: only letters (should fail)
+        assert!(!is_generic_name("abcdef"));
+
+        // Edge case: only digits (should fail)
+        assert!(!is_generic_name("123456"));
+    }
 }

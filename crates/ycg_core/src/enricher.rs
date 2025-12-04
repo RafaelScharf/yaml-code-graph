@@ -23,6 +23,63 @@ impl TreeSitterEnricher {
         Self { parsers }
     }
 
+    /// Resolves a variable name from source code at a specific position.
+    ///
+    /// Uses Tree-sitter to find the identifier node at the given line and column,
+    /// then extracts the actual variable name from the source code.
+    ///
+    /// # Arguments
+    /// * `file_path` - Path to the source file
+    /// * `line` - Zero-based line number
+    /// * `col` - Zero-based column number
+    ///
+    /// # Returns
+    /// * `Some(String)` - The resolved variable name from source
+    /// * `None` - If resolution fails (file not found, parse error, no identifier at position)
+    ///
+    /// **Validates: Requirements 6.1, 6.3, 6.4, 6.5**
+    pub fn resolve_variable_name(
+        &mut self,
+        file_path: &Path,
+        line: usize,
+        col: usize,
+    ) -> Option<String> {
+        // Get language parser for file extension
+        let ext = file_path.extension()?.to_str()?;
+        let language = self.parsers.get(ext)?;
+
+        // Read source code
+        let source_code = std::fs::read_to_string(file_path).ok()?;
+
+        // Parse the file
+        let mut parser = Parser::new();
+        parser.set_language(*language).ok()?;
+        let tree = parser.parse(&source_code, None)?;
+
+        // Find node at the specified position
+        let node = find_node_at_position(tree.root_node(), line, col)?;
+
+        // Extract identifier text
+        if node.kind() == "identifier" || node.kind() == "variable_declarator" {
+            let text = &source_code[node.start_byte()..node.end_byte()];
+
+            // For variable_declarator, we need to find the identifier child
+            if node.kind() == "variable_declarator" {
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    if child.kind() == "identifier" {
+                        let name = &source_code[child.start_byte()..child.end_byte()];
+                        return Some(name.to_string());
+                    }
+                }
+            }
+
+            return Some(text.to_string());
+        }
+
+        None
+    }
+
     pub fn enrich(&mut self, file_path: &Path, start_line: usize) -> Option<EnrichmentResult> {
         let ext = file_path.extension()?.to_str()?;
         let language = self.parsers.get(ext)?;
@@ -38,10 +95,32 @@ impl TreeSitterEnricher {
 
         // 1. Assinatura
         let raw_text = &source_code[target_node.start_byte()..target_node.end_byte()];
-        let signature = if let Some(idx) = raw_text.find('{') {
-            Some(raw_text[..idx].trim().to_string())
+        let signature = if let Some(idx) = find_body_start(raw_text) {
+            let sig = raw_text[..idx].trim().to_string();
+            // Validate signature is not truncated
+            if is_truncated(&sig) {
+                eprintln!(
+                    "Warning: Truncated signature at {}:{} - falling back to symbol name",
+                    file_path.display(),
+                    start_line
+                );
+                None
+            } else {
+                Some(sig)
+            }
         } else {
-            Some(raw_text.trim().to_string())
+            let sig = raw_text.trim().to_string();
+            // Validate signature is not truncated
+            if is_truncated(&sig) {
+                eprintln!(
+                    "Warning: Truncated signature at {}:{} - falling back to symbol name",
+                    file_path.display(),
+                    start_line
+                );
+                None
+            } else {
+                Some(sig)
+            }
         };
 
         // 2. Documentação
@@ -161,4 +240,75 @@ fn extract_guard_clauses(node: Node, source: &str, lang: Language) -> Vec<String
     }
 
     preconditions
+}
+/// Finds the start of the function body by matching brackets.
+/// Returns the index of the first unmatched opening brace '{'.
+/// Handles nested parentheses and angle brackets to avoid false positives.
+fn find_body_start(text: &str) -> Option<usize> {
+    let mut paren_depth = 0;
+    let mut angle_depth = 0;
+
+    for (i, ch) in text.char_indices() {
+        match ch {
+            '(' => paren_depth += 1,
+            ')' => paren_depth -= 1,
+            '<' => angle_depth += 1,
+            '>' => angle_depth -= 1,
+            '{' if paren_depth == 0 && angle_depth == 0 => return Some(i),
+            _ => {}
+        }
+    }
+
+    None
+}
+
+/// Detects if a signature is truncated or incomplete.
+/// Checks for unmatched brackets and incomplete patterns.
+fn is_truncated(signature: &str) -> bool {
+    signature.ends_with('(')
+        || signature.ends_with('<')
+        || signature.matches('(').count() != signature.matches(')').count()
+        || signature.matches('<').count() != signature.matches('>').count()
+}
+
+/// Finds the smallest node at a specific position in the AST.
+///
+/// Recursively searches the tree to find the most specific (deepest) node
+/// that contains the given line and column position.
+///
+/// # Arguments
+/// * `node` - The root node to start searching from
+/// * `line` - Zero-based line number
+/// * `col` - Zero-based column number
+///
+/// # Returns
+/// * `Some(Node)` - The smallest node containing the position
+/// * `None` - If no node contains the position
+fn find_node_at_position(node: Node, line: usize, col: usize) -> Option<Node> {
+    let start_pos = node.start_position();
+    let end_pos = node.end_position();
+
+    // Check if position is within this node's range
+    if line < start_pos.row || line > end_pos.row {
+        return None;
+    }
+
+    if line == start_pos.row && col < start_pos.column {
+        return None;
+    }
+
+    if line == end_pos.row && col > end_pos.column {
+        return None;
+    }
+
+    // Try to find a more specific child node
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(found) = find_node_at_position(child, line, col) {
+            return Some(found);
+        }
+    }
+
+    // No more specific child found, return this node
+    Some(node)
 }
