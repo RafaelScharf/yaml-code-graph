@@ -5,8 +5,11 @@ This guide explains how to install the YCG CLI tool on your system.
 ## Quick Install (Recommended)
 
 ### Prerequisites
-- Rust 1.75+ and Cargo installed
+- Rust 1.75+ and Cargo installed (for building YCG itself)
 - macOS, Linux, or WSL on Windows
+- Language-specific indexers:
+  - **TypeScript/JavaScript** (✅ Stable): `npm install -g @sourcegraph/scip-typescript`
+  - **Rust** (🚧 Beta): `rustup component add rust-analyzer`
 
 ### Installation Steps
 

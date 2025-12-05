@@ -87,8 +87,13 @@ ycg index [OPTIONS]
 
 **Supported Languages:**
 
-- **Rust:** Detects `Cargo.toml`, uses `rust-analyzer`
-- **TypeScript/JavaScript:** Detects `package.json` or `tsconfig.json`, uses `scip-typescript`
+| Language | Status | Detection | Indexer |
+|----------|--------|-----------|---------|
+| **TypeScript/JavaScript** | ✅ Stable | `package.json` or `tsconfig.json` | `scip-typescript` |
+| **Rust** | 🚧 Beta | `Cargo.toml` | `rust-analyzer` |
+| **Python** | 📅 Planned | `requirements.txt` or `pyproject.toml` | `scip-python` |
+
+**Recommendation:** TypeScript/JavaScript has the most mature and tested support. Rust support is functional but may have edge cases in complex macro-heavy codebases.
 
 **Examples:**
 
@@ -105,21 +110,28 @@ ycg index --directory /path/to/project --output /tmp/index.scip
 
 **Requirements:**
 
-- **Rust projects:** `rust-analyzer` must be installed
-  ```bash
-  rustup component add rust-analyzer
-  ```
-
-- **TypeScript/JavaScript projects:** `scip-typescript` must be installed
+- **TypeScript/JavaScript projects** (✅ Stable - Recommended): `scip-typescript` must be installed
   ```bash
   npm install -g @sourcegraph/scip-typescript
   ```
 
+- **Rust projects** (🚧 Beta): `rust-analyzer` must be installed
+  ```bash
+  rustup component add rust-analyzer
+  ```
+
+**Note:** For production use, TypeScript/JavaScript support is recommended due to extensive testing and stability.
+
 **Error Messages:**
 
 - `"Could not detect project language"` - No `Cargo.toml`, `package.json`, or `tsconfig.json` found
-- `"rust-analyzer not found"` - Install with `rustup component add rust-analyzer`
-- `"scip-typescript not found"` - Install with `npm install -g @sourcegraph/scip-typescript`
+- `"scip-typescript not found"` - Install with `npm install -g @sourcegraph/scip-typescript` (✅ Stable)
+- `"rust-analyzer not found"` - Install with `rustup component add rust-analyzer` (🚧 Beta)
+
+**Language Support Status:**
+- TypeScript/JavaScript: ✅ Production-ready
+- Rust: 🚧 Beta (functional, some edge cases)
+- Python: 📅 Planned for v2.0
 
 ---
 

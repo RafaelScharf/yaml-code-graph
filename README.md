@@ -26,6 +26,18 @@ ycg generate -i index.scip -o graph.yaml --compact
 
 That's it! YCG automatically detects your project language (Rust or TypeScript) and generates the semantic graph.
 
+## 🌐 Language Support
+
+| Language | Status | SCIP Indexer | Tree-sitter Grammar | Notes |
+|----------|--------|--------------|---------------------|-------|
+| **TypeScript** | ✅ Stable | `@sourcegraph/scip-typescript` | ✅ Full support | Recommended for production use |
+| **JavaScript** | ✅ Stable | `@sourcegraph/scip-typescript` | ✅ Full support | Same tooling as TypeScript |
+| **Rust** | 🚧 Beta | `rust-analyzer` | ✅ Full support | Core functionality works, some edge cases |
+| **Python** | 📅 Planned | `scip-python` | 🔄 In progress | Roadmap for v2.0 |
+| **Java** | 📅 Planned | `scip-java` | 🔄 In progress | Roadmap for v2.0 |
+
+**Recommendation:** For production use, TypeScript/JavaScript projects have the most mature support and extensive testing. Rust support is functional but may have edge cases in complex macro-heavy codebases.
+
 ## Why YCG?
 
 Traditional code context (raw files) is inefficient and noisy for LLMs. YCG addresses this by:
@@ -458,8 +470,10 @@ Automatically detect project language and generate SCIP index.
 | `-o, --output` | Output path for SCIP index | `index.scip` |
 
 **Supported Languages:**
-- **Rust**: Detects `Cargo.toml`, uses `rust-analyzer`
-- **TypeScript/JavaScript**: Detects `package.json`, uses `scip-typescript`
+- **TypeScript/JavaScript** (✅ Stable): Detects `package.json` or `tsconfig.json`, uses `scip-typescript`
+- **Rust** (🚧 Beta): Detects `Cargo.toml`, uses `rust-analyzer`
+
+See the [Language Support](#-language-support) section for detailed status and recommendations.
 
 #### `ycg generate`
 
@@ -596,21 +610,24 @@ Taxa de Compressão: 1.61x
 ## 🛣️ Roadmap
 
 - [x] SCIP Protobuf deserialization
-- [x] Tree-sitter enrichment (TypeScript, JavaScript, Rust)
+- [x] Tree-sitter enrichment (TypeScript ✅, JavaScript ✅, Rust 🚧)
 - [x] Logic lifting (guard clauses)
 - [x] Deterministic xxHash-64 identifiers
 - [x] LOD filtering
 - [x] Adjacency list optimization
 - [x] Token density metrics
+- [x] Configuration file support
 - [ ] Streaming mode for >100MB indexes
-- [ ] Python grammar support
+- [ ] Python language support (grammar + indexer integration)
+- [ ] Java language support (grammar + indexer integration)
+- [ ] Rust macro expansion improvements
 - [ ] Property-based testing suite
-- [ ] Configuration file support
 
 ## 📚 Documentation
 
 - **[CLI Reference](CLI_REFERENCE.md)** - Complete command-line interface documentation
 - **[Quick Start Guide](QUICKSTART.md)** - 5-minute tutorial
+- **[Language Support](LANGUAGE_SUPPORT.md)** - Detailed language support status and limitations
 - **[Granularity Guide](GRANULARITY_GUIDE.md)** - Ad-hoc granularity levels explained
 - **[Optimization Guide](OPTIMIZATION_GUIDE.md)** - Token optimization strategies
 - **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions

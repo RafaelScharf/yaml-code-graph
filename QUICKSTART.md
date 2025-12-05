@@ -230,12 +230,14 @@ ls Cargo.toml package.json
 
 Install the required indexer:
 ```bash
-# For Rust
-rustup component add rust-analyzer
-
-# For TypeScript
+# For TypeScript/JavaScript (✅ Stable - Recommended)
 npm install -g @sourcegraph/scip-typescript
+
+# For Rust (🚧 Beta)
+rustup component add rust-analyzer
 ```
+
+**Note:** TypeScript/JavaScript support is production-ready. Rust support is functional but in beta.
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
 

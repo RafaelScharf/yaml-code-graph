@@ -6,16 +6,21 @@
 
 #### Error: "Could not detect project language"
 
-**Cause**: YCG looks for `Cargo.toml` (Rust) or `package.json` (TypeScript/JavaScript) to detect the language.
+**Cause**: YCG looks for `Cargo.toml` (Rust) or `package.json`/`tsconfig.json` (TypeScript/JavaScript) to detect the language.
 
 **Solution**:
 1. Ensure you're in the correct project directory
 2. Verify the manifest file exists:
    ```bash
-   ls Cargo.toml    # For Rust
-   ls package.json  # For TypeScript/JavaScript
+   ls package.json tsconfig.json  # For TypeScript/JavaScript (✅ Stable)
+   ls Cargo.toml                  # For Rust (🚧 Beta)
    ```
 3. If using a non-standard structure, use manual indexing instead
+
+**Language Support Status**:
+- **TypeScript/JavaScript**: ✅ Production-ready, fully tested
+- **Rust**: 🚧 Beta, functional but may have edge cases
+- **Python**: 📅 Planned for v2.0
 
 #### Error: "rust-analyzer not found in PATH"
 
@@ -30,6 +35,8 @@ rustup component add rust-analyzer
 rust-analyzer --version
 ```
 
+**Note**: Rust support is currently in **🚧 Beta**. For production use, consider TypeScript/JavaScript which has **✅ Stable** support.
+
 **Alternative**: Install from source following the [official guide](https://rust-analyzer.github.io/manual.html#installation)
 
 #### Error: "scip-typescript not found"
@@ -38,12 +45,14 @@ rust-analyzer --version
 
 **Solution**:
 ```bash
-# Install globally via npm
+# Install globally via npm (Recommended - ✅ Stable)
 npm install -g @sourcegraph/scip-typescript
 
 # Verify installation
 scip-typescript --version
 ```
+
+**Note**: TypeScript/JavaScript support is **✅ Production-ready** with extensive testing and full feature support.
 
 **Alternative**: Use `npx` for local execution (no global install needed):
 ```bash
